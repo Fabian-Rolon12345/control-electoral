@@ -41,5 +41,3 @@ Nunca colocar la clave `service_role` en `config.js`; esa clave queda solamente 
 ## Publicación
 
 La carpeta pública es `dist`. Puede publicarse en Vercel, Netlify o un hosting tradicional. En Vercel, no requiere comando de compilación y el directorio de salida es `dist`.
-Proyecto conectado automáticamente con Vercel.
-Proyecto conectado con Vercel.

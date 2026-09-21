@@ -63,18 +63,18 @@
     enterApp();
   }
   async function loadAll(){
-    const [b,p,v,a]=await Promise.all([
+    const [b,p,v]=await Promise.all([
       db.from('barrios').select('*').order('nombre'), db.from('perfiles').select('*').order('nombre'),
-      db.from('votantes').select('*').order('nombre'), db.from('auditoria').select('*').order('creado_en',{ascending:false}).limit(100)
+      db.from('votantes').select('*').order('nombre')
     ]);
-    [b,p,v,a].forEach(r=>{if(r.error)throw r.error});
-    state.barrios=b.data;state.profiles=p.data;state.votantes=v.data;state.auditoria=a.data;
+    [b,p,v].forEach(r=>{if(r.error)throw r.error});
+    state.barrios=b.data;state.profiles=p.data;state.votantes=v.data;
   }
   function subscribeRealtime(){
     state.channel=db.channel('control-en-vivo')
       .on('postgres_changes',{event:'*',schema:'public',table:'votantes'},async()=>{await loadAll();renderAll()})
-      .on('postgres_changes',{event:'*',schema:'public',table:'auditoria'},async()=>{await loadAll();renderAll()})
       .on('postgres_changes',{event:'*',schema:'public',table:'barrios'},async()=>{await loadAll();renderAll()})
+      .on('postgres_changes',{event:'*',schema:'public',table:'perfiles'},async()=>{await loadAll();renderAll()})
       .subscribe();
   }
   function enterApp(){
@@ -84,7 +84,7 @@
     $('#demo-box').classList.toggle('hidden',hasSupabase);
     renderAll();
   }
-  function renderAll(){renderStats();renderProgress();renderActivity();renderFilters();renderVoters();renderBarrios();renderManagers();renderAudit()}
+  function renderAll(){renderStats();renderProgress();renderActivity();renderFilters();renderVoters();renderBarrios();renderManagers()}
   function renderStats(){
     const voters=visibleVoters(), voted=voters.filter(v=>v.voto_confirmado).length;
     $('#stat-total').textContent=voters.length;$('#stat-voted').textContent=voted;$('#stat-pending').textContent=voters.length-voted;$('#stat-percent').textContent=`${voters.length?Math.round(voted/voters.length*100):0}% del padrón`;$('#stat-barrios').textContent=visibleBarrios().filter(b=>b.activo).length;
@@ -116,22 +116,24 @@
   }
   function renderVoters(){
     const list=filteredVoters();renderLookupResult(list);$('#empty-voters').classList.toggle('hidden',list.length>0);
-    $('#voters-body').innerHTML=list.map(v=>`<tr><td><strong>${esc(v.nombre)}</strong><span class="person-meta">${esc(v.telefono||'Sin teléfono')}</span></td><td>${esc(v.cedula)}</td><td>${esc(barrioName(v.barrio_id))}</td><td><span class="status ${v.voto_confirmado?'voted':'pending'}">${v.voto_confirmado?'✓ Ya votó':'◷ Pendiente'}</span></td><td>${fmtTime(v.voto_hora)}</td><td>${v.voto_confirmado?`<button class="undo-btn" data-vote="${v.id}" data-value="false">Deshacer</button>`:`<button class="vote-btn" data-vote="${v.id}" data-value="true">✓ Marcar votó</button>`}</td></tr>`).join('');
+    $('#voters-body').innerHTML=list.map(v=>`<tr><td><strong>${esc(v.nombre)}</strong><span class="person-meta">${esc(v.telefono||'Sin teléfono')}</span></td><td>${esc(v.cedula)}</td><td>${esc(barrioName(v.barrio_id))}</td><td><span class="status ${v.voto_confirmado?'voted':'pending'}">${v.voto_confirmado?'✓ Ya votó':'◷ Pendiente'}</span></td><td>${fmtTime(v.voto_hora)}</td><td><div class="row-actions">${v.voto_confirmado?`<button class="undo-btn" data-vote="${v.id}" data-value="false">Deshacer</button>`:`<button class="vote-btn" data-vote="${v.id}" data-value="true">✓ Marcar votó</button>`}<button class="action-btn" data-edit-voter="${v.id}">Editar</button>${state.user.rol==='admin'?`<button class="action-btn danger" data-delete-voter="${v.id}">Eliminar</button>`:''}</div></td></tr>`).join('');
     $$('[data-vote]').forEach(btn=>btn.onclick=()=>toggleVote(btn.dataset.vote,btn.dataset.value==='true'));
+    $$('[data-edit-voter]').forEach(btn=>btn.onclick=()=>openVoter(state.votantes.find(v=>v.id===btn.dataset.editVoter)));
+    $$('[data-delete-voter]').forEach(btn=>btn.onclick=()=>deleteVoter(btn.dataset.deleteVoter));
   }
   function renderBarrios(){
-    $('#barrios-grid').innerHTML=state.barrios.map(b=>{const voters=state.votantes.filter(v=>v.barrio_id===b.id),n=voters.filter(v=>v.voto_confirmado).length;return `<article class="entity-card"><div class="entity-card-top"><div><h4>${esc(b.nombre)}</h4><p>${esc(b.descripcion||'Sin descripción')}</p></div><button class="card-menu" data-edit-barrio="${b.id}">•••</button></div><div class="mini-stats"><span>${voters.length} registrados</span><strong>${n} votaron</strong></div></article>`}).join('');
+    $('#barrios-grid').innerHTML=state.barrios.map(b=>{const voters=state.votantes.filter(v=>v.barrio_id===b.id),n=voters.filter(v=>v.voto_confirmado).length;return `<article class="entity-card"><div class="entity-card-top"><div><h4>${esc(b.nombre)}</h4><p>${esc(b.descripcion||'Sin descripción')}</p></div><div class="card-actions"><button class="action-btn" data-edit-barrio="${b.id}">Editar</button><button class="action-btn danger" data-delete-barrio="${b.id}">Eliminar</button></div></div><div class="mini-stats"><span>${voters.length} registrados</span><strong>${n} votaron</strong></div></article>`}).join('');
     $$('[data-edit-barrio]').forEach(btn=>btn.onclick=()=>openBarrio(state.barrios.find(b=>b.id===btn.dataset.editBarrio)));
+    $$('[data-delete-barrio]').forEach(btn=>btn.onclick=()=>deleteBarrio(btn.dataset.deleteBarrio));
   }
   function renderManagers(){
-    $('#managers-grid').innerHTML=state.profiles.filter(p=>p.rol==='encargado').map(p=>`<article class="entity-card"><div class="manager-head"><div class="avatar">${initials(p.nombre)}</div><div><h4>${esc(p.nombre)}</h4><p>${esc(p.email)}</p></div></div><div class="mini-stats"><span>${esc(barrioName(p.barrio_id))}</span><strong>${p.activo?'Activo':'Inactivo'}</strong></div></article>`).join('');
-  }
-  function renderAudit(){
-    $('#audit-list').innerHTML=state.auditoria.map(a=>`<div class="audit-row"><div class="avatar">${initials(profileName(a.usuario_id))}</div><div><strong>${esc(a.accion)}</strong><span>${esc(profileName(a.usuario_id))}</span></div><time>${new Date(a.creado_en).toLocaleString('es-PY',{dateStyle:'short',timeStyle:'short'})}</time></div>`).join('')||'<div class="empty">No hay acciones registradas.</div>';
+    $('#managers-grid').innerHTML=state.profiles.filter(p=>p.rol==='encargado').map(p=>`<article class="entity-card"><div class="entity-card-top"><div class="manager-head"><div class="avatar">${initials(p.nombre)}</div><div><h4>${esc(p.nombre)}</h4><p>${esc(p.email)}</p></div></div><div class="card-actions"><button class="action-btn" data-edit-manager="${p.id}">Editar</button><button class="action-btn danger" data-delete-manager="${p.id}">Eliminar</button></div></div><div class="mini-stats"><span>${esc(barrioName(p.barrio_id))}</span><strong>${p.activo?'Activo':'Inactivo'}</strong></div></article>`).join('');
+    $$('[data-edit-manager]').forEach(btn=>btn.onclick=()=>openManager(state.profiles.find(p=>p.id===btn.dataset.editManager)));
+    $$('[data-delete-manager]').forEach(btn=>btn.onclick=()=>deleteManager(btn.dataset.deleteManager));
   }
   async function audit(action){
     const row={accion:action,usuario_id:state.user.id,creado_en:new Date().toISOString()};
-    if(hasSupabase){const {error}=await db.from('auditoria').insert(row);if(error)throw error}else state.auditoria.unshift({id:uid(),...row});
+    if(hasSupabase){const {error}=await db.from('auditoria').insert(row);if(error)console.warn('No se pudo registrar auditoría:',error.message)}else state.auditoria.unshift({id:uid(),...row});
   }
   async function toggleVote(id,value){
     const voter=state.votantes.find(v=>v.id===id);if(!voter)return;
@@ -147,20 +149,26 @@
     $('#modal-form').onsubmit=async(e)=>{e.preventDefault();if(e.submitter?.value==='cancel'){modal.close();return}try{await onSave(new FormData(e.currentTarget));modal.close();renderAll()}catch(err){toast(err.message)}};
   }
   function barrioOptions(selected=''){return visibleBarrios().filter(b=>b.activo).map(b=>`<option value="${b.id}" ${b.id===selected?'selected':''}>${esc(b.nombre)}</option>`).join('')}
-  function openVoter(){const assigned=state.user.rol==='admin'?'':state.user.barrio_id;showModal({eyebrow:'PADRÓN ELECTORAL',title:'Agregar nuevo votante',fields:`<label>Nombre y apellido<input name="nombre" required maxlength="100"></label><label>Número de cédula<input name="cedula" inputmode="numeric" pattern="[0-9]+" required maxlength="15"></label><label>Teléfono<input name="telefono" inputmode="tel" maxlength="30"></label><label>Barrio<select name="barrio_id" required><option value="">Seleccionar…</option>${barrioOptions(assigned)}</select></label>`,onSave:async fd=>{
-    const cedula=digits(fd.get('cedula'));if(state.votantes.some(v=>digits(v.cedula)===cedula)){const found=state.votantes.find(v=>digits(v.cedula)===cedula);throw new Error(`La cédula ya está registrada: ${found.voto_confirmado?'YA VOTÓ':'todavía no votó'}`)}
+  function openVoter(existing=null){const assigned=existing?.barrio_id||(state.user.rol==='admin'?'':state.user.barrio_id);showModal({eyebrow:'PADRÓN ELECTORAL',title:existing?'Editar votante':'Agregar nuevo votante',fields:`<label>Nombre y apellido<input name="nombre" required maxlength="100" value="${esc(existing?.nombre||'')}"></label><label>Número de cédula<input name="cedula" inputmode="numeric" pattern="[0-9]+" required maxlength="15" value="${esc(existing?.cedula||'')}"></label><label>Teléfono<input name="telefono" inputmode="tel" maxlength="30" value="${esc(existing?.telefono||'')}"></label><label>Barrio<select name="barrio_id" required><option value="">Seleccionar…</option>${barrioOptions(assigned)}</select></label>`,onSave:async fd=>{
+    const cedula=digits(fd.get('cedula'));if(state.votantes.some(v=>v.id!==existing?.id&&digits(v.cedula)===cedula)){const found=state.votantes.find(v=>v.id!==existing?.id&&digits(v.cedula)===cedula);throw new Error(`La cédula ya está registrada: ${found.voto_confirmado?'YA VOTÓ':'todavía no votó'}`)}
     const barrioId=fd.get('barrio_id');if(state.user.rol!=='admin'&&barrioId!==state.user.barrio_id)throw new Error('Solo podés registrar personas de tu barrio asignado');
-    const row={nombre:fd.get('nombre').trim(),cedula,telefono:fd.get('telefono').trim(),barrio_id:barrioId,voto_confirmado:false,registrado_por:state.user.id};
-    if(hasSupabase){const {data,error}=await db.from('votantes').insert(row).select().single();if(error)throw error;state.votantes.push(data)}else state.votantes.push({id:uid(),voto_hora:null,...row});await audit(`Registró a ${row.nombre} en el padrón`);toast('Votante agregado correctamente');
+    const row=existing
+      ? {nombre:fd.get('nombre').trim(),cedula,telefono:fd.get('telefono').trim(),barrio_id:barrioId}
+      : {nombre:fd.get('nombre').trim(),cedula,telefono:fd.get('telefono').trim(),barrio_id:barrioId,voto_confirmado:false,registrado_por:state.user.id};
+    if(hasSupabase){const q=existing?db.from('votantes').update({...row,actualizado_en:new Date().toISOString()}).eq('id',existing.id).select().single():db.from('votantes').insert(row).select().single();const {data,error}=await q;if(error)throw error;if(existing)Object.assign(existing,data);else state.votantes.push(data)}else if(existing)Object.assign(existing,row);else state.votantes.push({id:uid(),voto_hora:null,...row});await audit(`${existing?'Actualizó':'Registró'} a ${row.nombre} en el padrón`);toast(existing?'Votante actualizado':'Votante agregado correctamente');
   }})}
+  async function deleteVoter(id){const voter=state.votantes.find(v=>v.id===id);if(!voter||!confirm(`¿Eliminar definitivamente a ${voter.nombre}?`))return;try{if(hasSupabase){const {error}=await db.from('votantes').delete().eq('id',id);if(error)throw error;await loadAll()}else state.votantes=state.votantes.filter(v=>v.id!==id);await audit(`Eliminó del padrón a ${voter.nombre}`);renderAll();toast('Votante eliminado')}catch(e){toast(`No se pudo eliminar: ${e.message}`)}}
   function openBarrio(existing=null){showModal({eyebrow:'ORGANIZACIÓN TERRITORIAL',title:existing?'Editar barrio':'Crear nuevo barrio',fields:`<label>Nombre del barrio<input name="nombre" required maxlength="80" value="${esc(existing?.nombre||'')}"></label><label>Descripción<input name="descripcion" maxlength="140" value="${esc(existing?.descripcion||'')}"></label>`,onSave:async fd=>{const row={nombre:fd.get('nombre').trim(),descripcion:fd.get('descripcion').trim(),activo:true};if(hasSupabase){const q=existing?db.from('barrios').update(row).eq('id',existing.id):db.from('barrios').insert(row);const {error}=await q;if(error)throw error;await loadAll()}else if(existing)Object.assign(existing,row);else state.barrios.push({id:uid(),...row});await audit(`${existing?'Actualizó':'Creó'} el barrio ${row.nombre}`);toast('Barrio guardado')}})}
-  function openManager(){showModal({eyebrow:'CONTROL DE ACCESO',title:'Crear encargado',fields:`<label>Nombre y apellido<input name="nombre" required maxlength="100"></label><label>Correo electrónico<input name="email" type="email" required></label><label>Contraseña temporal<input name="password" type="password" required minlength="8"></label><label>Barrio asignado<select name="barrio_id" required><option value="">Seleccionar…</option>${barrioOptions()}</select></label>`,onSave:async fd=>{const row={nombre:fd.get('nombre').trim(),email:fd.get('email').trim(),password:fd.get('password'),barrio_id:fd.get('barrio_id')};if(hasSupabase){const {data:{session}}=await db.auth.getSession();const res=await fetch(`${cfg.SUPABASE_URL}/functions/v1/crear-encargado`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`},body:JSON.stringify(row)});const result=await res.json();if(!res.ok)throw new Error(result.error||'No se pudo crear la cuenta');await loadAll()}else state.profiles.push({id:uid(),rol:'encargado',activo:true,...row});await audit(`Creó la cuenta de ${row.nombre}`);toast('Encargado creado y asignado')}})}
+  async function deleteBarrio(id){const barrio=state.barrios.find(b=>b.id===id);if(!barrio)return;const usados=state.votantes.some(v=>v.barrio_id===id)||state.profiles.some(p=>p.barrio_id===id);if(usados){toast('Primero eliminá o reasigná sus votantes y encargados');return}if(!confirm(`¿Eliminar definitivamente el barrio ${barrio.nombre}?`))return;try{if(hasSupabase){const {error}=await db.from('barrios').delete().eq('id',id);if(error)throw error;await loadAll()}else state.barrios=state.barrios.filter(b=>b.id!==id);await audit(`Eliminó el barrio ${barrio.nombre}`);renderAll();toast('Barrio eliminado')}catch(e){toast(`No se pudo eliminar: ${e.message}`)}}
+  async function managerRequest(body){const {data:{session}}=await db.auth.getSession();if(!session)throw new Error('La sesión venció. Volvé a ingresar.');const res=await fetch(`${cfg.SUPABASE_URL}/functions/v1/crear-encargado`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`},body:JSON.stringify(body)});const result=await res.json();if(!res.ok)throw new Error(result.error||'No se pudo completar la operación');return result}
+  function openManager(existing=null){showModal({eyebrow:'CONTROL DE ACCESO',title:existing?'Editar encargado':'Crear encargado',fields:`<label>Nombre y apellido<input name="nombre" required maxlength="100" value="${esc(existing?.nombre||'')}"></label><label>Correo electrónico<input name="email" type="email" required value="${esc(existing?.email||'')}"></label><label>${existing?'Nueva contraseña (opcional)':'Contraseña temporal'}<input name="password" type="password" ${existing?'':'required'} minlength="8"></label><label>Barrio asignado<select name="barrio_id" required><option value="">Seleccionar…</option>${barrioOptions(existing?.barrio_id||'')}</select></label>`,onSave:async fd=>{const row={action:existing?'update':'create',id:existing?.id,nombre:fd.get('nombre').trim(),email:fd.get('email').trim(),password:fd.get('password'),barrio_id:fd.get('barrio_id')};if(hasSupabase){await managerRequest(row);await loadAll()}else if(existing)Object.assign(existing,row);else state.profiles.push({id:uid(),rol:'encargado',activo:true,...row});await audit(`${existing?'Actualizó':'Creó'} la cuenta de ${row.nombre}`);toast(existing?'Encargado actualizado':'Encargado creado y asignado')}})}
+  async function deleteManager(id){const manager=state.profiles.find(p=>p.id===id);if(!manager||!confirm(`¿Eliminar definitivamente la cuenta de ${manager.nombre}?`))return;try{if(hasSupabase){await managerRequest({action:'delete',id});await loadAll()}else state.profiles=state.profiles.filter(p=>p.id!==id);await audit(`Eliminó la cuenta de ${manager.nombre}`);renderAll();toast('Encargado eliminado')}catch(e){toast(`No se pudo eliminar: ${e.message}`)}}
   function exportCsv(){const rows=[['Nombre','Cedula','Telefono','Barrio','Estado','Hora'],...filteredVoters().map(v=>[v.nombre,v.cedula,v.telefono||'',barrioName(v.barrio_id),v.voto_confirmado?'Ya votó':'Pendiente',v.voto_hora||''])];const csv='\uFEFF'+rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(';')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`votantes-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href)}
-  function navigate(page){$$('.page').forEach(p=>p.classList.toggle('active',p.id===page));$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));const meta={dashboard:['Resumen general','Estado actualizado de la jornada'],votantes:['Control de votantes','Buscá y confirmá rápidamente'],barrios:['Barrios y zonas','Organización territorial'],encargados:['Equipo de encargados','Cuentas, permisos y asignaciones'],auditoria:['Historial del sistema','Trazabilidad de todas las acciones']}[page];$('#page-title').textContent=meta[0];$('#page-subtitle').textContent=meta[1];$('.sidebar').classList.remove('open')}
+  function navigate(page){$$('.page').forEach(p=>p.classList.toggle('active',p.id===page));$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));const meta={dashboard:['Resumen general','Estado actualizado de la jornada'],votantes:['Control de votantes','Buscá y confirmá rápidamente'],barrios:['Barrios y zonas','Organización territorial'],encargados:['Equipo de encargados','Cuentas, permisos y asignaciones']}[page];$('#page-title').textContent=meta[0];$('#page-subtitle').textContent=meta[1];$('.sidebar').classList.remove('open')}
 
   $('#login-form').onsubmit=async e=>{e.preventDefault();const btn=e.currentTarget.querySelector('button');btn.disabled=true;btn.textContent='Ingresando…';try{await login($('#email').value.trim(),$('#password').value)}catch(err){toast(err.message)}finally{btn.disabled=false;btn.textContent='Ingresar'}};
   $('#logout').onclick=async()=>{if(hasSupabase){await db.auth.signOut();if(state.channel)await db.removeChannel(state.channel)}location.reload()};
   $$('#nav button').forEach(b=>b.onclick=()=>navigate(b.dataset.page));$('#menu').onclick=()=>$('.sidebar').classList.toggle('open');
   ['#voter-search','#filter-barrio','#filter-status'].forEach(s=>$(s).addEventListener(s==='#voter-search'?'input':'change',renderVoters));
-  $('#new-voter').onclick=openVoter;$('#new-barrio').onclick=()=>openBarrio();$('#new-manager').onclick=openManager;$('#export-btn').onclick=exportCsv;
+  $('#new-voter').onclick=()=>openVoter();$('#new-barrio').onclick=()=>openBarrio();$('#new-manager').onclick=()=>openManager();$('#export-btn').onclick=exportCsv;
 })();
