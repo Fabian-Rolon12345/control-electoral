@@ -2,7 +2,7 @@
   'use strict';
   const cfg = window.APP_CONFIG || {};
   const hasSupabase = !cfg.DEMO_MODE && cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && window.supabase;
-  const db = hasSupabase ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
+  const db = hasSupabase ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {auth:{persistSession:true,autoRefreshToken:true}}) : null;
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const fmtTime = (v) => v ? new Date(v).toLocaleTimeString('es-PY', {hour:'2-digit',minute:'2-digit'}) : '—';
@@ -43,16 +43,45 @@
   function visibleVoters(){return state.user?.rol==='admin' ? state.votantes : state.votantes.filter(v=>v.barrio_id===state.user?.barrio_id)}
   function visibleBarrios(){return state.user?.rol==='admin' ? state.barrios : state.barrios.filter(b=>b.id===state.user?.barrio_id)}
 
+  function savedValue(key){try{return sessionStorage.getItem(key)}catch{return null}}
+  function saveValue(key,value){try{if(value===null)sessionStorage.removeItem(key);else sessionStorage.setItem(key,value)}catch{}}
+  function pageKey(){return 'control-electoral:page:'+state.user.id}
+  async function loadSessionUser(user){
+    const {data:profile,error}=await db.from('perfiles').select('*').eq('id',user.id).single();
+    if(error)throw error;
+    if(!profile||!profile.activo)throw new Error('Esta cuenta no est? activa.');
+    state.user=profile;
+    await loadAll();subscribeRealtime();
+  }
+  async function restoreSession(){
+    $('#login-view').classList.add('hidden');
+    $('#session-loading').classList.remove('hidden');
+    try{
+      if(hasSupabase){
+        const {data,error}=await db.auth.getSession();
+        if(error)throw error;
+        if(data.session){await loadSessionUser(data.session.user);enterApp()}
+      }else{
+        const profile=seed.profiles.find(p=>p.id===savedValue('control-electoral:demo-user')&&p.activo);
+        if(profile)await login(profile.email,profile.password);
+      }
+    }catch(error){
+      state.user=null;
+      toast('No se pudo recuperar la sesi?n: '+error.message);
+    }finally{
+      $('#session-loading').classList.add('hidden');
+      if(!state.user)$('#login-view').classList.remove('hidden');
+    }
+  }
   async function login(email,password){
     if(hasSupabase){
       const {data,error}=await db.auth.signInWithPassword({email,password});
       if(error) throw error;
-      const {data:profile,error:pErr}=await db.from('perfiles').select('*').eq('id',data.user.id).single();
-      if(pErr) throw pErr; state.user=profile;
-      await loadAll(); subscribeRealtime();
+      await loadSessionUser(data.user);
     } else {
       const profile=seed.profiles.find(p=>p.email.toLowerCase()===email.toLowerCase()&&p.password===password&&p.activo);
       if(!profile) throw new Error('Correo o contraseña incorrectos');
+      saveValue('control-electoral:demo-user',profile.id);
       state.user={...profile}; state.barrios=structuredClone(seed.barrios); state.profiles=structuredClone(seed.profiles); state.votantes=structuredClone(seed.votantes);
       state.auditoria=[
         {id:'a1',accion:'Confirmó el voto de Andrea López',usuario_id:'u2',creado_en:new Date(Date.now()-8*60000).toISOString()},
@@ -83,6 +112,7 @@
     $$('[data-admin]').forEach(el=>el.classList.toggle('hidden',state.user.rol!=='admin'));
     $('#demo-box').classList.toggle('hidden',hasSupabase);
     renderAll();
+    navigate(savedValue(pageKey())||'dashboard');
   }
   function renderAll(){renderStats();renderProgress();renderActivity();renderFilters();renderVoters();renderBarrios();renderManagers()}
   function renderStats(){
@@ -166,11 +196,23 @@
   function openManager(existing=null){showModal({eyebrow:'CONTROL DE ACCESO',title:existing?'Editar encargado':'Crear encargado',fields:`<label>Nombre y apellido<input name="nombre" required maxlength="100" value="${esc(existing?.nombre||'')}"></label><label>Correo electrónico<input name="encargado_email" type="email" autocomplete="off" autocapitalize="none" spellcheck="false" required value="${esc(existing?.email||'')}"></label><label>${existing?'Nueva contraseña (opcional)':'Contraseña temporal'}<input name="encargado_password" type="password" autocomplete="new-password" ${existing?'':'required'} minlength="8"></label><label>Barrio asignado<select name="barrio_id" required><option value="">Seleccionar…</option>${barrioOptions(existing?.barrio_id||'')}</select></label>`,onSave:async fd=>{const row={action:existing?'update':'create',id:existing?.id,nombre:fd.get('nombre').trim(),email:fd.get('encargado_email').trim(),password:fd.get('encargado_password'),barrio_id:fd.get('barrio_id')};if(hasSupabase){await managerRequest(row);await loadAll()}else if(existing)Object.assign(existing,row);else state.profiles.push({id:uid(),rol:'encargado',activo:true,...row});await audit(`${existing?'Actualizó':'Creó'} la cuenta de ${row.nombre}`);toast(existing?'Encargado actualizado':'Encargado creado y asignado')}})}
   async function deleteManager(id){const manager=state.profiles.find(p=>p.id===id);if(!manager||!confirm(`¿Eliminar definitivamente la cuenta de ${manager.nombre}?`))return;try{if(hasSupabase){await managerRequest({action:'delete',id});await loadAll()}else state.profiles=state.profiles.filter(p=>p.id!==id);await audit(`Eliminó la cuenta de ${manager.nombre}`);renderAll();toast('Encargado eliminado')}catch(e){toast(`No se pudo eliminar: ${e.message}`)}}
   function exportCsv(){const rows=[['Nombre','Cedula','Telefono','Barrio','Estado','Hora'],...filteredVoters().map(v=>[v.nombre,v.cedula,v.telefono||'',barrioName(v.barrio_id),v.voto_confirmado?'Ya votó':'Pendiente',v.voto_hora||''])];const csv='\uFEFF'+rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(';')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`votantes-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href)}
-  function navigate(page){$$('.page').forEach(p=>p.classList.toggle('active',p.id===page));$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));const meta={dashboard:['Resumen general','Estado actualizado de la jornada'],votantes:['Control de votantes','Buscá y confirmá rápidamente'],barrios:['Barrios y zonas','Organización territorial'],encargados:['Equipo de encargados','Cuentas, permisos y asignaciones']}[page];$('#page-title').textContent=meta[0];$('#page-subtitle').textContent=meta[1];$('.sidebar').classList.remove('open')}
+  function navigate(page){
+    const allowed=state.user.rol==='admin'?['dashboard','votantes','barrios','encargados']:['dashboard','votantes'];
+    if(!allowed.includes(page))page='dashboard';
+    saveValue(pageKey(),page);
+    $$('.page').forEach(p=>p.classList.toggle('active',p.id===page));$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));const meta={dashboard:['Resumen general','Estado actualizado de la jornada'],votantes:['Control de votantes','Buscá y confirmá rápidamente'],barrios:['Barrios y zonas','Organización territorial'],encargados:['Equipo de encargados','Cuentas, permisos y asignaciones']}[page];$('#page-title').textContent=meta[0];$('#page-subtitle').textContent=meta[1];$('.sidebar').classList.remove('open')}
 
   $('#login-form').onsubmit=async e=>{e.preventDefault();const btn=e.currentTarget.querySelector('button');btn.disabled=true;btn.textContent='Ingresando…';try{await login($('#email').value.trim(),$('#password').value)}catch(err){toast(err.message)}finally{btn.disabled=false;btn.textContent='Ingresar'}};
-  $('#logout').onclick=async()=>{if(hasSupabase){await db.auth.signOut();if(state.channel)await db.removeChannel(state.channel)}location.reload()};
+  $('#logout').onclick=async()=>{
+    try{
+      if(hasSupabase){const {error}=await db.auth.signOut();if(error)throw error;if(state.channel)await db.removeChannel(state.channel)}
+      if(state.user)saveValue(pageKey(),null);
+      saveValue('control-electoral:demo-user',null);
+      location.reload();
+    }catch(error){toast('No se pudo cerrar la sesi?n: '+error.message)}
+  };
   $$('#nav button').forEach(b=>b.onclick=()=>navigate(b.dataset.page));$('#menu').onclick=()=>$('.sidebar').classList.toggle('open');
   ['#voter-search','#filter-barrio','#filter-status'].forEach(s=>$(s).addEventListener(s==='#voter-search'?'input':'change',renderVoters));
   $('#new-voter').onclick=()=>openVoter();$('#new-barrio').onclick=()=>openBarrio();$('#new-manager').onclick=()=>openManager();$('#export-btn').onclick=exportCsv;
+  restoreSession();
 })();
