@@ -44,6 +44,15 @@
   function visibleBarrios(){return state.user?.rol==='admin' ? state.barrios : state.barrios.filter(b=>b.id===state.user?.barrio_id)}
 
   function savedValue(key){try{return sessionStorage.getItem(key)}catch{return null}}
+  function rememberLoginEmail(email){
+    try{localStorage.setItem('control-electoral:last-email',email||'')}catch{}
+  }
+  function prepareLogin(){
+    let email='';
+    try{email=localStorage.getItem('control-electoral:last-email')||''}catch{}
+    $('#email').value=email;
+    $('#password').value='';
+  }
   function saveValue(key,value){try{if(value===null)sessionStorage.removeItem(key);else sessionStorage.setItem(key,value)}catch{}}
   function pageKey(){return 'control-electoral:page:'+state.user.id}
   async function loadSessionUser(user){
@@ -70,7 +79,7 @@
       toast('No se pudo recuperar la sesi?n: '+error.message);
     }finally{
       $('#session-loading').classList.add('hidden');
-      if(!state.user)$('#login-view').classList.remove('hidden');
+      if(!state.user){prepareLogin();$('#login-view').classList.remove('hidden')}
     }
   }
   async function login(email,password){
@@ -107,6 +116,8 @@
       .subscribe();
   }
   function enterApp(){
+    rememberLoginEmail(state.user.email);
+    $('#password').value='';
     $('#login-view').classList.add('hidden');$('#app-view').classList.remove('hidden');
     $('#side-name').textContent=state.user.nombre;$('#side-role').textContent=state.user.rol==='admin'?'Administrador general':`Encargado · ${barrioName(state.user.barrio_id)}`;$('#avatar').textContent=initials(state.user.nombre);
     $$('[data-admin]').forEach(el=>el.classList.toggle('hidden',state.user.rol!=='admin'));
@@ -206,6 +217,7 @@
   $('#logout').onclick=async()=>{
     try{
       if(hasSupabase){const {error}=await db.auth.signOut();if(error)throw error;if(state.channel)await db.removeChannel(state.channel)}
+      if(state.user)rememberLoginEmail(state.user.email);
       if(state.user)saveValue(pageKey(),null);
       saveValue('control-electoral:demo-user',null);
       location.reload();
