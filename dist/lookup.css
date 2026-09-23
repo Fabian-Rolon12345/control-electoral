@@ -1,0 +1,29 @@
+.lookup-result {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: -.25rem 0 1rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid;
+  border-radius: 12px;
+  box-shadow: 0 4px 18px rgba(12, 47, 43, .05);
+}
+.lookup-result .lookup-icon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.25rem;
+  font-weight: 900;
+  background: rgba(255, 255, 255, .7);
+}
+.lookup-result small, .lookup-result strong, .lookup-result p { display: block; margin: 0; }
+.lookup-result small { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 800; }
+.lookup-result strong { font-size: 1rem; margin: .12rem 0; }
+.lookup-result p { font-size: .74rem; }
+.lookup-result.already-voted { background: #e4f7ee; border-color: #9bd9c0; color: #087555; }
+.lookup-result.not-voted { background: #fff2d9; border-color: #f1cf8a; color: #8b5a09; }
+.lookup-result.not-found { background: #fff1f2; border-color: #efbdc3; color: #a32f3d; }
+.lookup-result.matches { background: #eef4ff; border-color: #bfd0f2; color: #315cae; }
