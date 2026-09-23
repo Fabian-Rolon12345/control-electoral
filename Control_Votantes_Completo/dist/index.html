@@ -9,6 +9,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23092f2b'/%3E%3Cpath d='M18 34l9 9 19-23' fill='none' stroke='%23fff' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="lookup.css" />
+  <link rel="stylesheet" href="desktop.css" />
 </head>
 <body>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
@@ -107,11 +108,11 @@
     </div>
   </div>
 
-  <dialog id="modal">
+  <dialog id="modal" aria-labelledby="modal-title">
     <form id="modal-form" method="dialog">
-      <div class="modal-head"><div><span class="eyebrow" id="modal-eyebrow">NUEVO REGISTRO</span><h3 id="modal-title">Agregar</h3></div><button value="cancel" class="close" aria-label="Cerrar">×</button></div>
+      <div class="modal-head"><div><span class="eyebrow" id="modal-eyebrow">NUEVO REGISTRO</span><h3 id="modal-title">Agregar</h3></div><button type="button" data-modal-close class="close" aria-label="Cerrar">×</button></div>
       <div id="modal-fields" class="modal-fields"></div>
-      <div class="modal-actions"><button value="cancel" class="btn secondary">Cancelar</button><button id="modal-save" value="default" class="btn primary">Guardar</button></div>
+      <div class="modal-actions"><button type="button" data-modal-close class="btn secondary">Cancelar</button><button id="modal-save" type="submit" value="default" class="btn primary">Guardar</button></div>
     </form>
   </dialog>
 

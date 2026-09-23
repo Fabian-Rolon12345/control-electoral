@@ -1,0 +1,38 @@
+/* Desktop look inspired by classic Java Swing forms. */
+:root{--ink:#263442;--muted:#586675;--line:#b9c3cd;--soft:#e9edf1;--forest:#254c73;--teal:#346b9e;--paper:#fff;--shadow:0 2px 5px #243b5314;font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--soft)}
+.login-brand{background:linear-gradient(145deg,#254c73,#16334f)}
+.login-brand:before,.login-brand:after{display:none}
+.login-brand h1,.login-card h2,.topbar h2,.stats strong,.panel-head h3,.section-action h3,.entity-card h4,.modal-head h3{font-family:inherit}
+.login-brand h1{font-size:clamp(2.4rem,5vw,4rem);line-height:1.1}
+.login-panel{background:#e9edf1}
+.login-card{background:#f5f6f8;border:1px solid var(--line);padding:2rem;box-shadow:0 4px 14px #243b5320;border-radius:4px}
+.login-card h2{font-size:1.65rem}.eyebrow{color:#346b9e;letter-spacing:.08em}.login-brand .eyebrow{color:#bbd6ed}
+.brand-mark,.brand-mark.small,.avatar{border-radius:4px;background:#dce8f3;color:#254c73;box-shadow:none}
+.sidebar{background:#e0e5eb;color:var(--ink);border-right:1px solid #aab6c2;padding:1rem .65rem}
+.side-brand{border-color:#b9c3cd;padding-bottom:1rem}.side-brand span,.side-user span{color:var(--muted)}
+.sidebar nav{gap:.3rem;margin-top:1rem}.sidebar nav button{color:var(--ink);border:1px solid transparent;border-radius:3px;padding:.65rem .75rem}
+.sidebar nav button.active{background:linear-gradient(#e4effa,#c9ddf0);border-color:#86a7c6;color:#163b60;box-shadow:inset 0 1px #fff}
+.sidebar nav button:hover{background:#d1dfed;color:#163b60;border-color:#9bb2c8}
+.side-user{border-color:#b9c3cd}.side-user button{color:#254c73}
+.topbar{height:72px;background:linear-gradient(#fff,#e9edf2);border-bottom:1px solid #aab6c2;padding:0 1.5rem}.topbar h2{font-size:1.25rem}
+.page{padding:1.5rem}.stats{gap:.8rem}.stats article,.panel,.entity-card{border-radius:3px;box-shadow:0 1px 3px #243b5310}
+.stats article{padding:1rem}.stat-icon{border-radius:3px}.stats strong{font-size:1.7rem;font-variant-numeric:tabular-nums}
+.panel-head{background:linear-gradient(#f8fafc,#e8edf3);padding:.85rem 1rem;border-radius:3px 3px 0 0}.panel-head h3,.section-action h3{font-size:1rem}
+.btn,.action-btn,.vote-btn,.card-menu{border-radius:3px;font-weight:600;box-shadow:inset 0 1px #ffffff80}
+.btn{padding:.6rem .9rem}.btn.primary{border:1px solid #234e79;background:linear-gradient(#487faf,#306393)}
+.btn.primary:hover{background:linear-gradient(#3c719f,#254f79)}.btn.secondary,.action-btn{background:linear-gradient(#fff,#e5e9ee);border-color:#aab6c2}
+.btn.secondary:hover,.action-btn:hover{background:#dce9f6;border-color:#6a94bb}
+.login-card input,.modal-fields input,.modal-fields select,.toolbar select{border-radius:2px;border-color:#a6b2bf;padding:.65rem .75rem;box-shadow:inset 0 1px 2px #243b5310}
+.search{border-radius:2px;border-color:#a6b2bf}.search input{padding:.6rem}.search:focus-within{outline:2px solid #7cadd5;outline-offset:1px}
+button:focus-visible,a:focus-visible{outline:2px solid #1a6ab0;outline-offset:3px}
+th{background:linear-gradient(#f5f7fa,#dce3eb);color:#35485b;border-right:1px solid #c3ccd5;padding:.7rem .9rem;text-transform:none;letter-spacing:0;font-size:.75rem}
+td{padding:.7rem .9rem;border-right:1px solid #e2e7ed;border-bottom:1px solid #dce3eb}tbody tr:nth-child(even){background:#f3f6f9}tbody tr:hover{background:#e4effa}
+.status,.chip,.live{border-radius:3px}.progress-track,.progress-track i{border-radius:2px}.live{background:#f7fafc}.lookup-result{border-radius:3px;box-shadow:none}
+dialog{border:1px solid #8094a8;border-radius:4px;background:#f0f2f5;box-shadow:0 14px 45px #152d4960;max-height:calc(100dvh - 2rem);overflow:auto}
+dialog::backdrop{background:#142b454d;backdrop-filter:none}
+.modal-head{background:linear-gradient(#416e99,#294f75);color:#fff;padding:.85rem 1.1rem;align-items:center;border-bottom:1px solid #1b3c5e}
+.modal-head .eyebrow{color:#d4e3f1;font-size:.65rem}.modal-head h3{font-size:1.1rem;margin:.2rem 0 0}
+.close{border:1px solid #d4e3f180;border-radius:3px;background:#ffffff15;color:#fff;flex-shrink:0}.close:hover{background:#b33b42;border-color:#b33b42}
+.modal-fields{padding:1.2rem;background:#f4f5f7}.modal-fields label{color:#33465a}.modal-actions{background:#e3e8ee;border-top:1px solid #bcc7d2;padding:.85rem 1.2rem}.modal-actions .btn{min-width:95px}
+@media(max-width:800px){.page{padding:1rem}.topbar{padding:0 1rem}.login-card{padding:1.5rem}.sidebar{box-shadow:8px 0 24px #243b5330}}
+@media(max-width:520px){.stats article{padding:.8rem .6rem}.stats strong{font-size:1.4rem}.login-panel{padding:1rem}.modal-fields{padding:1rem}}
