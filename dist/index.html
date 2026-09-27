@@ -80,13 +80,13 @@
 
       <section id="votantes" class="page">
         <div class="toolbar">
-          <div class="search"><span>⌕</span><input id="voter-search" inputmode="search" placeholder="Buscar por cédula, nombre o teléfono…" /></div>
+          <div class="search"><span>⌕</span><input id="voter-search" inputmode="search" placeholder="Buscar por cédula, apellido o nombre…" /></div>
           <select id="filter-barrio" data-admin aria-label="Filtrar por barrio"><option value="">Todos los barrios</option></select>
           <select id="filter-status" aria-label="Filtrar por estado"><option value="">Todos los estados</option><option value="voted">Ya votaron</option><option value="pending">Pendientes</option></select>
         </div>
         <div id="lookup-result" class="lookup-result hidden" role="status" aria-live="polite"></div>
         <article class="panel table-panel">
-          <div class="table-wrap"><table><thead><tr><th>Nombre y apellido</th><th>Cédula</th><th>Mesa</th><th>Orden</th><th>Nacimiento</th><th>Edad</th><th>Partido</th><th>Tipo de voto</th><th>Inscripción</th><th>Institución</th><th>Estado</th><th>Acción</th></tr></thead><tbody id="voters-body"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Mesa</th><th>Orden</th><th>Cédula</th><th>Apellido y Nombre</th><th>Fec. Nac.</th><th>Partido</th><th>Edad</th><th>Tipo de Voto</th><th>Tipo Inscrip.</th><th>Institución</th><th>Estado</th><th>Confirmar</th></tr></thead><tbody id="voters-body"></tbody></table></div>
           <div id="empty-voters" class="empty hidden">No se encontraron votantes.</div>
         </article>
       </section>
