@@ -39,18 +39,17 @@
   <div id="app-view" class="app hidden">
     <aside class="sidebar">
       <div class="side-brand"><div class="brand-mark small">✓</div><div><strong>Control Electoral</strong><span>San Patricio</span></div></div>
-      <nav id="nav">
-        <button data-page="dashboard" class="active"><span>▦</span> Resumen</button>
-        <button data-page="votantes"><span>☷</span> Votantes</button>
-        <button data-page="encargados" data-admin><span>♙</span> Encargados</button>
-      </nav>
       <div class="side-user"><div class="avatar" id="avatar">FR</div><div><strong id="side-name">Usuario</strong><span id="side-role">Rol</span></div><button id="logout" title="Cerrar sesión">↪</button></div>
     </aside>
 
     <div class="workspace">
       <header class="topbar">
         <button id="menu" class="icon-btn" aria-label="Abrir menú">☰</button>
-        <div><h2 id="page-title">Resumen general</h2><p id="page-subtitle">Estado actualizado de la jornada</p></div>
+        <nav id="nav" aria-label="Navegación principal">
+          <button data-page="dashboard" class="active"><span>▦</span> Resumen</button>
+          <button data-page="votantes"><span>☷</span> Votantes</button>
+          <button data-page="encargados" data-admin><span>♙</span> Encargados</button>
+        </nav>
         <div class="live"><i></i><span>En vivo</span></div>
       </header>
 
@@ -76,7 +75,6 @@
       <section id="votantes" class="page">
         <div class="toolbar">
           <div class="search"><span>⌕</span><input id="voter-search" inputmode="search" placeholder="Buscar por cédula, apellido o nombre…" /></div>
-          <select id="filter-barrio" data-admin aria-label="Filtrar por barrio"><option value="">Todos los barrios</option></select>
           <select id="filter-status" aria-label="Filtrar por estado"><option value="">Todos los estados</option><option value="voted">Ya votaron</option><option value="pending">Pendientes</option></select>
         </div>
         <div id="lookup-result" class="lookup-result hidden" role="status" aria-live="polite"></div>

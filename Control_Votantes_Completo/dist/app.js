@@ -89,6 +89,8 @@
     $$('[data-admin]').forEach(el=>el.classList.toggle('hidden',state.user.rol!=='admin'));
     $$('[data-admin-action]').forEach(el=>el.classList.toggle('hidden',state.user.rol!=='admin'));
     renderAll();
+    const saved=localStorage.getItem('control-electoral-page')||'dashboard';
+    navigate(saved==='encargados'&&state.user.rol!=='admin'?'dashboard':saved);
   }
   function renderAll(){renderStats();renderProgress();renderActivity();renderFilters();renderVoters();renderManagers()}
   function renderStats(){
@@ -104,11 +106,8 @@
     const recent=state.votantes.filter(v=>v.voto_confirmado&&allowed.has(v.id)).sort((a,b)=>new Date(b.voto_hora)-new Date(a.voto_hora)).slice(0,6);
     $('#recent-activity').innerHTML=recent.map(v=>`<div class="activity-item"><span class="activity-icon">✓</span><div><strong>${esc(v.nombre)} confirmó su voto</strong><span>${esc(barrioName(v.barrio_id))} · ${fmtTime(v.voto_hora)}</span></div></div>`).join('') || '<div class="empty">Sin actividad reciente.</div>';
   }
-  function renderFilters(){
-    const current=$('#filter-barrio').value;
-    $('#filter-barrio').innerHTML='<option value="">Todos los barrios</option>'+visibleBarrios().map(b=>`<option value="${b.id}">${esc(b.nombre)}</option>`).join('');$('#filter-barrio').value=current;
-  }
-  function filteredVoters(){const q=normalized($('#voter-search').value),qDigits=digits(q),b=$('#filter-barrio').value,s=$('#filter-status').value;return visibleVoters().filter(v=>(!q||normalized(v.nombre).includes(q)||(qDigits&&digits(v.cedula).includes(qDigits))||(qDigits&&digits(v.telefono).includes(qDigits)))&&(!b||v.barrio_id===b)&&(!s||(s==='voted'?v.voto_confirmado:!v.voto_confirmado)))}
+  function renderFilters(){}
+  function filteredVoters(){const q=normalized($('#voter-search').value),qDigits=digits(q),s=$('#filter-status').value;return visibleVoters().filter(v=>(!q||normalized(v.nombre).includes(q)||(qDigits&&digits(v.cedula).includes(qDigits)))&&(!s||(s==='voted'?v.voto_confirmado:!v.voto_confirmado)))}
   function renderLookupResult(list){
     const box=$('#lookup-result'),query=$('#voter-search').value.trim();
     if(!query){box.className='lookup-result hidden';box.innerHTML='';return}
@@ -168,12 +167,23 @@
   function openManager(existing=null){showModal({eyebrow:'CONTROL DE ACCESO',title:existing?'Editar encargado':'Crear encargado',fields:`<label>Nombre y apellido<input name="nombre" required maxlength="100" value="${esc(existing?.nombre||'')}"></label><label>Correo electrónico<input name="email" type="email" required value="${esc(existing?.email||'')}"></label><label>${existing?'Nueva contraseña (opcional)':'Contraseña temporal'}<input name="password" type="password" ${existing?'':'required'} minlength="8"></label>`,onSave:async fd=>{const row={action:existing?'update':'create',id:existing?.id,nombre:fd.get('nombre').trim(),email:fd.get('email').trim(),password:fd.get('password'),barrio_id:existing?.barrio_id||state.barrios[0]?.id};if(!row.barrio_id)throw new Error('No existe un registro base para crear la cuenta');if(hasSupabase){await managerRequest(row);await loadAll()}else if(existing)Object.assign(existing,row);else state.profiles.push({id:uid(),rol:'encargado',activo:true,...row});await audit(`${existing?'Actualizó':'Creó'} la cuenta de ${row.nombre}`);toast(existing?'Encargado actualizado':'Encargado creado con acceso general')}})}
   async function deleteManager(id){const manager=state.profiles.find(p=>p.id===id);if(!manager||!confirm(`¿Eliminar definitivamente la cuenta de ${manager.nombre}?`))return;try{if(hasSupabase){await managerRequest({action:'delete',id});await loadAll()}else state.profiles=state.profiles.filter(p=>p.id!==id);await audit(`Eliminó la cuenta de ${manager.nombre}`);renderAll();toast('Encargado eliminado')}catch(e){toast(`No se pudo eliminar: ${e.message}`)}}
   function exportCsv(){const rows=[['Nombre','Cedula','Telefono','Barrio','Estado','Hora'],...filteredVoters().map(v=>[v.nombre,v.cedula,v.telefono||'',barrioName(v.barrio_id),v.voto_confirmado?'Ya votó':'Pendiente',v.voto_hora||''])];const csv='\uFEFF'+rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(';')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`votantes-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href)}
-  function navigate(page){$$('.page').forEach(p=>p.classList.toggle('active',p.id===page));$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));const meta={dashboard:['Resumen general','Estado actualizado de la jornada'],votantes:['Control de votantes','Buscá y confirmá rápidamente'],barrios:['Barrios y zonas','Organización territorial'],encargados:['Equipo de encargados','Cuentas, permisos y asignaciones']}[page];$('#page-title').textContent=meta[0];$('#page-subtitle').textContent=meta[1];$('.sidebar').classList.remove('open')}
+  function navigate(page){if(!document.getElementById(page))page='dashboard';$$('.page').forEach(p=>p.classList.toggle('active',p.id===page));$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));localStorage.setItem('control-electoral-page',page);$('.sidebar').classList.remove('open')}
 
   $('#login-form').onsubmit=async e=>{e.preventDefault();const btn=e.currentTarget.querySelector('button');btn.disabled=true;btn.textContent='Ingresando…';try{await login($('#email').value.trim(),$('#password').value)}catch(err){toast(err.message)}finally{btn.disabled=false;btn.textContent='Ingresar'}};
   $('#logout').onclick=async()=>{if(hasSupabase){await db.auth.signOut();if(state.channel)await db.removeChannel(state.channel)}location.reload()};
   $('#modal-close').onclick=()=>$('#modal').close();$('#modal-cancel').onclick=()=>$('#modal').close();
   $$('#nav button').forEach(b=>b.onclick=()=>navigate(b.dataset.page));$('#menu').onclick=()=>$('.sidebar').classList.toggle('open');
-  ['#voter-search','#filter-barrio','#filter-status'].forEach(s=>$(s).addEventListener(s==='#voter-search'?'input':'change',renderVoters));
+  ['#voter-search','#filter-status'].forEach(s=>$(s).addEventListener(s==='#voter-search'?'input':'change',renderVoters));
   $('#new-manager').onclick=()=>openManager();
+
+  async function restoreSession(){
+    if(!hasSupabase)return;
+    try{
+      const {data:{session}}=await db.auth.getSession();if(!session)return;
+      const {data:profile,error}=await db.from('perfiles').select('*').eq('id',session.user.id).single();
+      if(error||!profile?.activo){await db.auth.signOut();return}
+      state.user=profile;await loadAll();subscribeRealtime();enterApp();
+    }catch(e){console.warn('No se pudo restaurar la sesión:',e.message)}
+  }
+  restoreSession();
 })();
