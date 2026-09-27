@@ -32,11 +32,6 @@
         <label>Correo electrónico<input id="email" type="email" autocomplete="username" placeholder="nombre@correo.com" required /></label>
         <label>Contraseña<input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required /></label>
         <button class="btn primary wide" type="submit">Ingresar</button>
-        <div class="demo-box" id="demo-box">
-          <strong>Prueba inmediata</strong>
-          <span>Administrador: admin@demo.com / admin123</span>
-          <span>Encargado: encargado@demo.com / encargado123</span>
-        </div>
       </form>
     </section>
   </main>
@@ -101,9 +96,9 @@
 
   <dialog id="modal">
     <form id="modal-form" method="dialog">
-      <div class="modal-head"><div><span class="eyebrow" id="modal-eyebrow">NUEVO REGISTRO</span><h3 id="modal-title">Agregar</h3></div><button value="cancel" class="close" aria-label="Cerrar">×</button></div>
+      <div class="modal-head"><div><span class="eyebrow" id="modal-eyebrow">NUEVO REGISTRO</span><h3 id="modal-title">Agregar</h3></div><button id="modal-close" type="button" class="close" aria-label="Cerrar">×</button></div>
       <div id="modal-fields" class="modal-fields"></div>
-      <div class="modal-actions"><button value="cancel" class="btn secondary">Cancelar</button><button id="modal-save" value="default" class="btn primary">Guardar</button></div>
+      <div class="modal-actions"><button id="modal-cancel" type="button" class="btn secondary">Cancelar</button><button id="modal-save" type="submit" class="btn primary">Guardar</button></div>
     </form>
   </dialog>
 

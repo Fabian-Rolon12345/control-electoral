@@ -88,7 +88,6 @@
     $('#side-name').textContent=state.user.nombre;$('#side-role').textContent=state.user.rol==='admin'?'Administrador general':'Encargado · Padrón general';$('#avatar').textContent=initials(state.user.nombre);
     $$('[data-admin]').forEach(el=>el.classList.toggle('hidden',state.user.rol!=='admin'));
     $$('[data-admin-action]').forEach(el=>el.classList.toggle('hidden',state.user.rol!=='admin'));
-    $('#demo-box').classList.toggle('hidden',hasSupabase);
     renderAll();
   }
   function renderAll(){renderStats();renderProgress();renderActivity();renderFilters();renderVoters();renderManagers()}
@@ -151,7 +150,7 @@
   }
   function showModal({eyebrow,title,fields,onSave}){
     $('#modal-eyebrow').textContent=eyebrow;$('#modal-title').textContent=title;$('#modal-fields').innerHTML=fields;const modal=$('#modal');modal.showModal();
-    $('#modal-form').onsubmit=async(e)=>{e.preventDefault();if(e.submitter?.value==='cancel'){modal.close();return}try{await onSave(new FormData(e.currentTarget));modal.close();renderAll()}catch(err){toast(err.message)}};
+    $('#modal-form').onsubmit=async(e)=>{e.preventDefault();try{await onSave(new FormData(e.currentTarget));modal.close();renderAll()}catch(err){toast(err.message)}};
   }
   function barrioOptions(selected=''){return visibleBarrios().filter(b=>b.activo).map(b=>`<option value="${b.id}" ${b.id===selected?'selected':''}>${esc(b.nombre)}</option>`).join('')}
   function openVoter(existing=null){const assigned=existing?.barrio_id||(state.user.rol==='admin'?'':state.user.barrio_id);showModal({eyebrow:'PADRÓN ELECTORAL',title:existing?'Editar votante':'Agregar nuevo votante',fields:`<label>Nombre y apellido<input name="nombre" required maxlength="100" value="${esc(existing?.nombre||'')}"></label><label>Número de cédula<input name="cedula" inputmode="numeric" pattern="[0-9]+" required maxlength="15" value="${esc(existing?.cedula||'')}"></label><label>Teléfono<input name="telefono" inputmode="tel" maxlength="30" value="${esc(existing?.telefono||'')}"></label><label>Barrio<select name="barrio_id" required><option value="">Seleccionar…</option>${barrioOptions(assigned)}</select></label>`,onSave:async fd=>{
@@ -173,6 +172,7 @@
 
   $('#login-form').onsubmit=async e=>{e.preventDefault();const btn=e.currentTarget.querySelector('button');btn.disabled=true;btn.textContent='Ingresando…';try{await login($('#email').value.trim(),$('#password').value)}catch(err){toast(err.message)}finally{btn.disabled=false;btn.textContent='Ingresar'}};
   $('#logout').onclick=async()=>{if(hasSupabase){await db.auth.signOut();if(state.channel)await db.removeChannel(state.channel)}location.reload()};
+  $('#modal-close').onclick=()=>$('#modal').close();$('#modal-cancel').onclick=()=>$('#modal').close();
   $$('#nav button').forEach(b=>b.onclick=()=>navigate(b.dataset.page));$('#menu').onclick=()=>$('.sidebar').classList.toggle('open');
   ['#voter-search','#filter-barrio','#filter-status'].forEach(s=>$(s).addEventListener(s==='#voter-search'?'input':'change',renderVoters));
   $('#new-manager').onclick=()=>openManager();
