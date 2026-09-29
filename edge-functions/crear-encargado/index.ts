@@ -20,25 +20,25 @@ serve(async (req) => {
     const action = body.action || 'create'
 
     if (action === 'create') {
-      const {nombre,email,password,barrio_id} = body
-      if (!nombre || !email || !password || !barrio_id) return json({error:'Faltan datos obligatorios'},400)
+      const {nombre,email,password} = body
+      if (!nombre || !email || !password) return json({error:'Faltan datos obligatorios'},400)
       const {data:created,error} = await admin.auth.admin.createUser({email,password,email_confirm:true})
       if (error) throw error
-      const {error:profileError} = await admin.from('perfiles').insert({id:created.user.id,nombre,email,rol:'encargado',barrio_id,activo:true})
+      const {error:profileError} = await admin.from('perfiles').insert({id:created.user.id,nombre,email,rol:'encargado',barrio_id:null,activo:true})
       if (profileError) { await admin.auth.admin.deleteUser(created.user.id); throw profileError }
       return json({ok:true,id:created.user.id},201)
     }
 
     if (action === 'update') {
-      const {id,nombre,email,password,barrio_id} = body
-      if (!id || !nombre || !email || !barrio_id) return json({error:'Faltan datos obligatorios'},400)
+      const {id,nombre,email,password} = body
+      if (!id || !nombre || !email) return json({error:'Faltan datos obligatorios'},400)
       const {data:target,error:targetError} = await admin.from('perfiles').select('rol').eq('id',id).single()
       if (targetError || target?.rol !== 'encargado') return json({error:'Encargado no encontrado'},404)
       const authChanges:Record<string,unknown> = {email,email_confirm:true}
       if (password) authChanges.password = password
       const {error:authError} = await admin.auth.admin.updateUserById(id,authChanges)
       if (authError) throw authError
-      const {error:updateError} = await admin.from('perfiles').update({nombre,email,barrio_id,activo:true}).eq('id',id)
+      const {error:updateError} = await admin.from('perfiles').update({nombre,email,barrio_id:null,activo:true}).eq('id',id)
       if (updateError) throw updateError
       return json({ok:true})
     }
