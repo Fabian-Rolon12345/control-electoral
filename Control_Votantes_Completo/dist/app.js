@@ -1,189 +1,255 @@
 (() => {
   'use strict';
+
   const cfg = window.APP_CONFIG || {};
   const hasSupabase = !cfg.DEMO_MODE && cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && window.supabase;
   const db = hasSupabase ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY) : null;
-  const $ = (s) => document.querySelector(s);
-  const $$ = (s) => [...document.querySelectorAll(s)];
-  const fmtTime = (v) => v ? new Date(v).toLocaleTimeString('es-PY', {hour:'2-digit',minute:'2-digit'}) : '—';
-  const initials = (name='') => name.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
-  const esc = (v='') => String(v).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-  const uid = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-  const digits = (v='') => String(v).replace(/\D/g,'');
-  const normalized = (v='') => String(v).trim().toLocaleLowerCase('es');
+  const $ = (selector) => document.querySelector(selector);
+  const $$ = (selector) => [...document.querySelectorAll(selector)];
+  const esc = (value = '') => String(value).replace(/[&<>'"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+  const digits = (value = '') => String(value).replace(/\D/g, '');
+  const normalized = (value = '') => String(value).trim().toLocaleLowerCase('es');
+  const initials = (name = '') => name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  const fmtTime = (value) => value ? new Date(value).toLocaleString('es-PY', {dateStyle:'short', timeStyle:'short'}) : '—';
+  const PAGE_SIZE = 50;
 
-  const seed = {
-    barrios: [
-      {id:'b1',nombre:'Centro',descripcion:'Zona céntrica de San Patricio',activo:true},
-      {id:'b2',nombre:'San Antonio',descripcion:'Sector norte',activo:true},
-      {id:'b3',nombre:'Santa Librada',descripcion:'Sector este',activo:true},
-      {id:'b4',nombre:'San José',descripcion:'Sector sur',activo:true}
-    ],
-    profiles: [
-      {id:'u1',nombre:'Fabián Rolón',email:'admin@demo.com',rol:'admin',barrio_id:null,activo:true,password:'admin123'},
-      {id:'u2',nombre:'María González',email:'encargado@demo.com',rol:'encargado',barrio_id:'b1',activo:true,password:'encargado123'},
-      {id:'u3',nombre:'Carlos Benítez',email:'carlos@demo.com',rol:'encargado',barrio_id:'b2',activo:true,password:'encargado123'}
-    ],
-    votantes: [
-      {id:'v1',nombre:'Andrea López',cedula:'4821560',telefono:'0981123456',barrio_id:'b1',voto_confirmado:true,voto_hora:new Date(Date.now()-8*60000).toISOString(),registrado_por:'u2'},
-      {id:'v2',nombre:'Ramón Acosta',cedula:'3928041',telefono:'0972123456',barrio_id:'b1',voto_confirmado:false,voto_hora:null,registrado_por:'u2'},
-      {id:'v3',nombre:'Lucía Martínez',cedula:'5512098',telefono:'0983123456',barrio_id:'b2',voto_confirmado:true,voto_hora:new Date(Date.now()-22*60000).toISOString(),registrado_por:'u3'},
-      {id:'v4',nombre:'Pedro Giménez',cedula:'3245771',telefono:'',barrio_id:'b2',voto_confirmado:false,voto_hora:null,registrado_por:'u3'},
-      {id:'v5',nombre:'Rosa Fernández',cedula:'6129033',telefono:'0984123456',barrio_id:'b3',voto_confirmado:true,voto_hora:new Date(Date.now()-42*60000).toISOString(),registrado_por:'u1'},
-      {id:'v6',nombre:'Miguel Rojas',cedula:'4456129',telefono:'',barrio_id:'b3',voto_confirmado:false,voto_hora:null,registrado_por:'u1'},
-      {id:'v7',nombre:'Elena Vera',cedula:'5077334',telefono:'',barrio_id:'b4',voto_confirmado:false,voto_hora:null,registrado_por:'u1'}
-    ],
-    auditoria: []
-  };
+  const state = {user:null, profiles:[], votantes:[], lista:[], channel:null, voterPage:1, listPage:1};
 
-  const state = { user:null, barrios:[], profiles:[], votantes:[], auditoria:[], channel:null };
-  function toast(message){const el=$('#toast');el.textContent=message;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2400)}
-  function barrioName(id){return state.barrios.find(b=>b.id===id)?.nombre || 'Sin asignar'}
-  function profileName(id){return state.profiles.find(p=>p.id===id)?.nombre || 'Usuario'}
-  function visibleVoters(){return state.votantes}
-  function visibleBarrios(){return state.barrios}
-
-  async function login(email,password){
-    if(hasSupabase){
-      const {data,error}=await db.auth.signInWithPassword({email,password});
-      if(error) throw error;
-      const {data:profile,error:pErr}=await db.from('perfiles').select('*').eq('id',data.user.id).single();
-      if(pErr) throw pErr; state.user=profile;
-      await loadAll(); subscribeRealtime();
-    } else {
-      const profile=seed.profiles.find(p=>p.email.toLowerCase()===email.toLowerCase()&&p.password===password&&p.activo);
-      if(!profile) throw new Error('Correo o contraseña incorrectos');
-      state.user={...profile}; state.barrios=structuredClone(seed.barrios); state.profiles=structuredClone(seed.profiles); state.votantes=structuredClone(seed.votantes);
-      state.auditoria=[
-        {id:'a1',accion:'Confirmó el voto de Andrea López',usuario_id:'u2',creado_en:new Date(Date.now()-8*60000).toISOString()},
-        {id:'a2',accion:'Confirmó el voto de Lucía Martínez',usuario_id:'u3',creado_en:new Date(Date.now()-22*60000).toISOString()},
-        {id:'a3',accion:'Confirmó el voto de Rosa Fernández',usuario_id:'u1',creado_en:new Date(Date.now()-42*60000).toISOString()}
-      ];
-    }
-    enterApp();
+  function toast(message) {
+    const element = $('#toast');
+    element.textContent = message;
+    element.classList.add('show');
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => element.classList.remove('show'), 3000);
   }
-  async function fetchAll(table,order='nombre'){
-    const rows=[];const size=1000;
-    for(let from=0;;from+=size){
-      const {data,error}=await db.from(table).select('*').order(order).range(from,from+size-1);
-      if(error)throw error;rows.push(...data);if(data.length<size)break;
+  function isAdmin() { return state.user?.rol === 'admin'; }
+  function listRecord(voterId) { return state.lista.find((row) => row.votante_id === voterId); }
+
+  async function fetchAll(table, order = 'nombre') {
+    const rows = [], size = 1000;
+    for (let from = 0; ; from += size) {
+      const {data, error} = await db.from(table).select('*').order(order).range(from, from + size - 1);
+      if (error) throw error;
+      rows.push(...data);
+      if (data.length < size) break;
     }
     return rows;
   }
-  async function loadAll(){
-    const [barrios,profiles,votantes]=await Promise.all([
-      fetchAll('barrios'),fetchAll('perfiles'),fetchAll('votantes')
-    ]);
-    state.barrios=barrios;state.profiles=profiles;state.votantes=votantes;
+  async function loadAll() {
+    const requests = [fetchAll('perfiles'), fetchAll('votantes')];
+    if (isAdmin()) requests.push(fetchAll('mis_votantes', 'creado_en'));
+    const [profiles, voters, list = []] = await Promise.all(requests);
+    state.profiles = profiles; state.votantes = voters; state.lista = list;
   }
-  function subscribeRealtime(){
-    state.channel=db.channel('control-en-vivo')
-      .on('postgres_changes',{event:'*',schema:'public',table:'votantes'},async()=>{await loadAll();renderAll()})
-      .on('postgres_changes',{event:'*',schema:'public',table:'barrios'},async()=>{await loadAll();renderAll()})
-      .on('postgres_changes',{event:'*',schema:'public',table:'perfiles'},async()=>{await loadAll();renderAll()})
-      .subscribe();
+  async function login(email, password) {
+    if (!hasSupabase) throw new Error('La conexión con Supabase no está configurada.');
+    const {data, error} = await db.auth.signInWithPassword({email, password});
+    if (error) throw error;
+    const {data:profile, error:profileError} = await db.from('perfiles').select('*').eq('id', data.user.id).single();
+    if (profileError || !profile?.activo) throw new Error('No se encontró un perfil activo para esta cuenta.');
+    state.user = profile; await loadAll(); subscribeRealtime(); enterApp();
   }
-  function enterApp(){
-    $('#login-view').classList.add('hidden');$('#app-view').classList.remove('hidden');
-    $('#side-name').textContent=state.user.nombre;$('#side-role').textContent=state.user.rol==='admin'?'Administrador general':'Encargado · Padrón general';$('#avatar').textContent=initials(state.user.nombre);
-    $$('[data-admin]').forEach(el=>el.classList.toggle('hidden',state.user.rol!=='admin'));
-    $$('[data-admin-action]').forEach(el=>el.classList.toggle('hidden',state.user.rol!=='admin'));
+  function subscribeRealtime() {
+    if (state.channel) db.removeChannel(state.channel);
+    state.channel = db.channel('control-electoral-en-vivo')
+      .on('postgres_changes', {event:'*', schema:'public', table:'votantes'}, refreshData)
+      .on('postgres_changes', {event:'*', schema:'public', table:'mis_votantes'}, refreshData)
+      .on('postgres_changes', {event:'*', schema:'public', table:'perfiles'}, refreshData).subscribe();
+  }
+  async function refreshData() {
+    try { await loadAll(); renderAll(); }
+    catch (error) { console.warn('No se pudo actualizar en tiempo real:', error.message); }
+  }
+  function enterApp() {
+    $('#login-view').classList.add('hidden'); $('#app-view').classList.remove('hidden');
+    $('#side-name').textContent = state.user.nombre;
+    $('#side-role').textContent = isAdmin() ? 'Administrador general' : 'Perfil de consulta';
+    $('#avatar').textContent = initials(state.user.nombre);
+    $$('[data-admin]').forEach((element) => element.classList.toggle('hidden', !isAdmin()));
     renderAll();
-    const saved=localStorage.getItem('control-electoral-page')||'dashboard';
-    navigate(saved==='encargados'&&state.user.rol!=='admin'?'dashboard':saved);
+    const saved = localStorage.getItem('control-electoral-page') || (isAdmin() ? 'dashboard' : 'votantes');
+    navigate(!isAdmin() && saved !== 'votantes' ? 'votantes' : saved);
   }
-  function renderAll(){renderStats();renderProgress();renderActivity();renderFilters();renderVoters();renderManagers()}
-  function renderStats(){
-    const voters=visibleVoters(), voted=voters.filter(v=>v.voto_confirmado).length;
-    $('#stat-total').textContent=voters.length;$('#stat-voted').textContent=voted;$('#stat-pending').textContent=voters.length-voted;$('#stat-percent').textContent=`${voters.length?Math.round(voted/voters.length*100):0}% del padrón`;$('#stat-barrios').textContent=visibleBarrios().filter(b=>b.activo).length;
-    $('#update-time').textContent=`Actualizado ${new Date().toLocaleTimeString('es-PY',{hour:'2-digit',minute:'2-digit'})}`;
+  function renderAll() {
+    if (isAdmin()) { renderStats(); renderSummary(); renderActivity(); renderMyList(); renderManagers(); }
+    renderVoters();
   }
-  function renderProgress(){
-    $('#barrio-progress').innerHTML=visibleBarrios().map(b=>{const all=state.votantes.filter(v=>v.barrio_id===b.id),n=all.filter(v=>v.voto_confirmado).length,p=all.length?Math.round(n/all.length*100):0;return `<div class="progress-row"><div class="progress-meta"><strong>${esc(b.nombre)}</strong><span>${n} de ${all.length} · ${p}%</span></div><div class="progress-track"><i style="width:${p}%"></i></div></div>`}).join('') || '<div class="empty">Todavía no hay barrios.</div>';
+  function renderStats() {
+    const active = state.lista.filter((row) => row.estado_lista === 'agregado');
+    const voterMap = new Map(state.votantes.map((voter) => [voter.id, voter]));
+    const voted = active.filter((row) => voterMap.get(row.votante_id)?.voto_confirmado).length;
+    $('#stat-total').textContent = active.length; $('#stat-voted').textContent = voted;
+    $('#stat-pending').textContent = active.length - voted;
+    $('#stat-percent').textContent = `${active.length ? Math.round(voted / active.length * 100) : 0}% de mi lista`;
+    $('#stat-excluded').textContent = state.lista.filter((row) => row.estado_lista === 'excluido').length;
+    $('#update-time').textContent = `Actualizado ${new Date().toLocaleTimeString('es-PY', {hour:'2-digit', minute:'2-digit'})}`;
   }
-  function renderActivity(){
-    const allowed=new Set(visibleVoters().map(v=>v.id));
-    const recent=state.votantes.filter(v=>v.voto_confirmado&&allowed.has(v.id)).sort((a,b)=>new Date(b.voto_hora)-new Date(a.voto_hora)).slice(0,6);
-    $('#recent-activity').innerHTML=recent.map(v=>`<div class="activity-item"><span class="activity-icon">✓</span><div><strong>${esc(v.nombre)} confirmó su voto</strong><span>${esc(barrioName(v.barrio_id))} · ${fmtTime(v.voto_hora)}</span></div></div>`).join('') || '<div class="empty">Sin actividad reciente.</div>';
+  function renderSummary() {
+    const active = state.lista.filter((row) => row.estado_lista === 'agregado');
+    const voterMap = new Map(state.votantes.map((voter) => [voter.id, voter]));
+    const voted = active.filter((row) => voterMap.get(row.votante_id)?.voto_confirmado).length;
+    const transferOk = active.filter((row) => row.traslado_ok).length;
+    const votePercent = active.length ? Math.round(voted / active.length * 100) : 0;
+    const transferPercent = active.length ? Math.round(transferOk / active.length * 100) : 0;
+    $('#list-progress').innerHTML = `<div class="progress-row"><div class="progress-meta"><strong>Votos confirmados</strong><span>${voted} de ${active.length} · ${votePercent}%</span></div><div class="progress-track"><i style="width:${votePercent}%"></i></div></div><div class="progress-row"><div class="progress-meta"><strong>Traslados completados</strong><span>${transferOk} de ${active.length} · ${transferPercent}%</span></div><div class="progress-track"><i style="width:${transferPercent}%"></i></div></div>`;
   }
-  function renderFilters(){}
-  function filteredVoters(){const q=normalized($('#voter-search').value),qDigits=digits(q),s=$('#filter-status').value;return visibleVoters().filter(v=>(!q||normalized(v.nombre).includes(q)||(qDigits&&digits(v.cedula).includes(qDigits)))&&(!s||(s==='voted'?v.voto_confirmado:!v.voto_confirmado)))}
-  function renderLookupResult(list){
-    const box=$('#lookup-result'),query=$('#voter-search').value.trim();
-    if(!query){box.className='lookup-result hidden';box.innerHTML='';return}
-    const exact=digits(query).length>=4?list.find(v=>digits(v.cedula)===digits(query)):null;
-    if(exact){
-      box.className=`lookup-result ${exact.voto_confirmado?'already-voted':'not-voted'}`;
-      box.innerHTML=`<span class="lookup-icon">${exact.voto_confirmado?'✓':'◷'}</span><div><small>Resultado por cédula</small><strong>${exact.voto_confirmado?'YA VOTÓ':'TODAVÍA NO VOTÓ'}</strong><p>${esc(exact.nombre)} · C.I. ${esc(exact.cedula)}${exact.voto_confirmado?` · ${fmtTime(exact.voto_hora)}`:''}</p></div>`;
-    }else if(!list.length){
-      box.className='lookup-result not-found';box.innerHTML='<span class="lookup-icon">!</span><div><small>Sin coincidencias</small><strong>NO ESTÁ EN EL SISTEMA</strong><p>Revisá la cédula, el nombre o el teléfono.</p></div>';
-    }else{box.className='lookup-result matches';box.innerHTML=`<span class="lookup-icon">⌕</span><div><small>Búsqueda</small><strong>${list.length} COINCIDENCIA${list.length===1?'':'S'}</strong><p>Elegí a la persona correcta en la lista.</p></div>`}
+  function renderActivity() {
+    const activeIds = new Set(state.lista.filter((row) => row.estado_lista === 'agregado').map((row) => row.votante_id));
+    const recent = state.votantes.filter((voter) => voter.voto_confirmado && activeIds.has(voter.id)).sort((a, b) => new Date(b.voto_hora) - new Date(a.voto_hora)).slice(0, 8);
+    $('#recent-activity').innerHTML = recent.map((voter) => `<div class="activity-item"><span class="activity-icon">✓</span><div><strong>${esc(voter.nombre)} confirmó su voto</strong><span>${fmtTime(voter.voto_hora)}</span></div></div>`).join('') || '<div class="empty">Sin actividad reciente en tu lista.</div>';
   }
-  function renderVoters(){
-    const list=filteredVoters();renderLookupResult(list);$('#empty-voters').classList.toggle('hidden',list.length>0);
-    $('#voters-body').innerHTML=list.map(v=>`<tr><td>${esc(v.mesa??'—')}</td><td>${esc(v.orden??'—')}</td><td>${esc(v.cedula)}</td><td><strong>${esc(v.nombre)}</strong></td><td>${esc(v.fecha_nacimiento||'—')}</td><td>${esc(v.partido||'—')}</td><td>${esc(v.edad??'—')}</td><td>${esc(v.tipo_voto||'—')}</td><td>${esc(v.tipo_inscripcion||'—')}</td><td>${esc(v.institucion||'—')}</td><td><span class="status ${v.voto_confirmado?'voted':'pending'}">${v.voto_confirmado?'✓ Ya votó':'◷ Pendiente'}</span><span class="person-meta">${fmtTime(v.voto_hora)}</span></td><td><div class="row-actions">${v.voto_confirmado?`<button class="undo-btn" data-vote="${v.id}" data-value="false">Deshacer</button>`:`<button class="vote-btn" data-vote="${v.id}" data-value="true">✓ Marcar votó</button>`}</div></td></tr>`).join('');
-    $$('[data-vote]').forEach(btn=>btn.onclick=()=>toggleVote(btn.dataset.vote,btn.dataset.value==='true'));
+  function filteredVoters() {
+    const query = normalized($('#voter-search').value), queryDigits = digits(query), status = $('#filter-status').value;
+    return state.votantes.filter((voter) => (!query || normalized(voter.nombre).includes(query) || (queryDigits && digits(voter.cedula).includes(queryDigits))) && (!status || (status === 'voted' ? voter.voto_confirmado : !voter.voto_confirmado)));
   }
-  function renderBarrios(){
-    $('#barrios-grid').innerHTML=state.barrios.map(b=>{const voters=state.votantes.filter(v=>v.barrio_id===b.id),n=voters.filter(v=>v.voto_confirmado).length;return `<article class="entity-card"><div class="entity-card-top"><div><h4>${esc(b.nombre)}</h4><p>${esc(b.descripcion||'Sin descripción')}</p></div><div class="card-actions"><button class="action-btn" data-edit-barrio="${b.id}">Editar</button><button class="action-btn danger" data-delete-barrio="${b.id}">Eliminar</button></div></div><div class="mini-stats"><span>${voters.length} registrados</span><strong>${n} votaron</strong></div></article>`}).join('');
-    $$('[data-edit-barrio]').forEach(btn=>btn.onclick=()=>openBarrio(state.barrios.find(b=>b.id===btn.dataset.editBarrio)));
-    $$('[data-delete-barrio]').forEach(btn=>btn.onclick=()=>deleteBarrio(btn.dataset.deleteBarrio));
+  function renderLookupResult(list) {
+    const box = $('#lookup-result'), query = $('#voter-search').value.trim();
+    if (!query) { box.className = 'lookup-result hidden'; box.innerHTML = ''; return; }
+    const exact = digits(query).length >= 4 ? list.find((voter) => digits(voter.cedula) === digits(query)) : null;
+    if (exact) {
+      box.className = `lookup-result ${exact.voto_confirmado ? 'already-voted' : 'not-voted'}`;
+      box.innerHTML = `<span class="lookup-icon">${exact.voto_confirmado ? '✓' : '◷'}</span><div><small>Resultado por cédula</small><strong>${exact.voto_confirmado ? 'YA VOTÓ' : 'TODAVÍA NO VOTÓ'}</strong><p>${esc(exact.nombre)} · C.I. ${esc(exact.cedula)}</p></div>`;
+    } else if (!list.length) {
+      box.className = 'lookup-result not-found'; box.innerHTML = '<span class="lookup-icon">!</span><div><small>Sin coincidencias</small><strong>NO ESTÁ EN EL SISTEMA</strong><p>Revisá la cédula o el nombre.</p></div>';
+    } else {
+      box.className = 'lookup-result matches'; box.innerHTML = `<span class="lookup-icon">⌕</span><div><small>Búsqueda</small><strong>${list.length} COINCIDENCIA${list.length === 1 ? '' : 'S'}</strong><p>Elegí a la persona correcta en la lista.</p></div>`;
+    }
   }
-  function renderManagers(){
-    $('#managers-grid').innerHTML=state.profiles.filter(p=>p.rol==='encargado').map(p=>`<article class="entity-card"><div class="entity-card-top"><div class="manager-head"><div class="avatar">${initials(p.nombre)}</div><div><h4>${esc(p.nombre)}</h4><p>${esc(p.email)}</p></div></div><div class="card-actions"><button class="action-btn" data-edit-manager="${p.id}">Editar</button><button class="action-btn danger" data-delete-manager="${p.id}">Eliminar</button></div></div><div class="mini-stats"><span>Acceso al padrón general</span><strong>${p.activo?'Activo':'Inactivo'}</strong></div></article>`).join('');
-    $$('[data-edit-manager]').forEach(btn=>btn.onclick=()=>openManager(state.profiles.find(p=>p.id===btn.dataset.editManager)));
-    $$('[data-delete-manager]').forEach(btn=>btn.onclick=()=>deleteManager(btn.dataset.deleteManager));
+  function pageRows(list, pageKey) {
+    const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+    state[pageKey] = Math.min(Math.max(1, state[pageKey]), pages);
+    const start = (state[pageKey] - 1) * PAGE_SIZE;
+    return {rows:list.slice(start, start + PAGE_SIZE), pages};
   }
-  async function audit(action){
-    const row={accion:action,usuario_id:state.user.id,creado_en:new Date().toISOString()};
-    if(hasSupabase){const {error}=await db.from('auditoria').insert(row);if(error)console.warn('No se pudo registrar auditoría:',error.message)}else state.auditoria.unshift({id:uid(),...row});
+  function renderPagination(target, total, pages, pageKey, render) {
+    const current = state[pageKey];
+    $(target).innerHTML = total ? `<span>Mostrando ${(current - 1) * PAGE_SIZE + 1}-${Math.min(current * PAGE_SIZE, total)} de ${total}</span><div><button data-prev ${current === 1 ? 'disabled' : ''}>‹ Anterior</button><strong>Página ${current} de ${pages}</strong><button data-next ${current === pages ? 'disabled' : ''}>Siguiente ›</button></div>` : '';
+    const prev = $(`${target} [data-prev]`), next = $(`${target} [data-next]`);
+    if (prev) prev.onclick = () => { state[pageKey]--; render(); };
+    if (next) next.onclick = () => { state[pageKey]++; render(); };
   }
-  async function toggleVote(id,value){
-    const voter=state.votantes.find(v=>v.id===id);if(!voter)return;
-    if(!value&&!confirm(`¿Deshacer la confirmación de ${voter.nombre}?`))return;
-    const changes={voto_confirmado:value,voto_hora:value?new Date().toISOString():null,voto_registrado_por:value?state.user.id:null};
-    try{
-      if(hasSupabase){const {error}=await db.rpc('marcar_estado_voto',{p_votante_id:id,p_voto_confirmado:value});if(error)throw error}else Object.assign(voter,changes);
-      await audit(`${value?'Confirmó':'Deshizo'} el voto de ${voter.nombre}`);if(hasSupabase)await loadAll();renderAll();toast(value?'Voto confirmado en tiempo real':'Confirmación deshecha');
-    }catch(e){toast(`No se pudo guardar: ${e.message}`)}
+  function renderVoters() {
+    const list = filteredVoters(); renderLookupResult(list); $('#empty-voters').classList.toggle('hidden', list.length > 0);
+    const {rows, pages} = pageRows(list, 'voterPage');
+    $('#voters-body').innerHTML = rows.map((voter) => {
+      const listed = listRecord(voter.id);
+      const listButton = !isAdmin() ? '' : listed ? `<button class="list-state-btn ${listed.estado_lista}" data-open-list="${voter.id}">${listed.estado_lista === 'agregado' ? '★ Agregado' : 'Excluido'}</button>` : `<button class="add-list-btn" data-add-list="${voter.id}">＋ Agregar</button>`;
+      return `<tr><td>${esc(voter.mesa ?? '—')}</td><td>${esc(voter.orden ?? '—')}</td><td>${esc(voter.cedula)}</td><td><strong>${esc(voter.nombre)}</strong></td><td>${esc(voter.fecha_nacimiento || '—')}</td><td>${esc(voter.partido || '—')}</td><td>${esc(voter.edad ?? '—')}</td><td>${esc(voter.tipo_voto || '—')}</td><td>${esc(voter.tipo_inscripcion || '—')}</td><td>${esc(voter.institucion || '—')}</td><td><span class="status ${voter.voto_confirmado ? 'voted' : 'pending'}">${voter.voto_confirmado ? '✓ Ya votó' : '◷ Pendiente'}</span></td><td><div class="row-actions">${voter.voto_confirmado ? `<button class="undo-btn" data-vote="${voter.id}" data-value="false">Deshacer</button>` : `<button class="vote-btn" data-vote="${voter.id}" data-value="true">✓ Marcar votó</button>`}</div></td>${isAdmin() ? `<td>${listButton}</td>` : ''}</tr>`;
+    }).join('');
+    $$('[data-vote]').forEach((button) => button.onclick = () => toggleVote(button.dataset.vote, button.dataset.value === 'true'));
+    $$('[data-add-list]').forEach((button) => button.onclick = () => openListForm(button.dataset.addList));
+    $$('[data-open-list]').forEach((button) => button.onclick = () => openListForm(button.dataset.openList));
+    renderPagination('#voters-pagination', list.length, pages, 'voterPage', renderVoters);
   }
-  function showModal({eyebrow,title,fields,onSave}){
-    $('#modal-eyebrow').textContent=eyebrow;$('#modal-title').textContent=title;$('#modal-fields').innerHTML=fields;const modal=$('#modal');modal.showModal();
-    $('#modal-form').onsubmit=async(e)=>{e.preventDefault();try{await onSave(new FormData(e.currentTarget));modal.close();renderAll()}catch(err){toast(err.message)}};
+  function joinedList() {
+    const voterMap = new Map(state.votantes.map((voter) => [voter.id, voter]));
+    return state.lista.map((row) => ({...row, voter:voterMap.get(row.votante_id)})).filter((row) => row.voter);
   }
-  function barrioOptions(selected=''){return visibleBarrios().filter(b=>b.activo).map(b=>`<option value="${b.id}" ${b.id===selected?'selected':''}>${esc(b.nombre)}</option>`).join('')}
-  function openVoter(existing=null){const assigned=existing?.barrio_id||(state.user.rol==='admin'?'':state.user.barrio_id);showModal({eyebrow:'PADRÓN ELECTORAL',title:existing?'Editar votante':'Agregar nuevo votante',fields:`<label>Nombre y apellido<input name="nombre" required maxlength="100" value="${esc(existing?.nombre||'')}"></label><label>Número de cédula<input name="cedula" inputmode="numeric" pattern="[0-9]+" required maxlength="15" value="${esc(existing?.cedula||'')}"></label><label>Teléfono<input name="telefono" inputmode="tel" maxlength="30" value="${esc(existing?.telefono||'')}"></label><label>Barrio<select name="barrio_id" required><option value="">Seleccionar…</option>${barrioOptions(assigned)}</select></label>`,onSave:async fd=>{
-    const cedula=digits(fd.get('cedula'));if(state.votantes.some(v=>v.id!==existing?.id&&digits(v.cedula)===cedula)){const found=state.votantes.find(v=>v.id!==existing?.id&&digits(v.cedula)===cedula);throw new Error(`La cédula ya está registrada: ${found.voto_confirmado?'YA VOTÓ':'todavía no votó'}`)}
-    const barrioId=fd.get('barrio_id');if(state.user.rol!=='admin'&&barrioId!==state.user.barrio_id)throw new Error('Solo podés registrar personas de tu barrio asignado');
-    const row=existing
-      ? {nombre:fd.get('nombre').trim(),cedula,telefono:fd.get('telefono').trim(),barrio_id:barrioId}
-      : {nombre:fd.get('nombre').trim(),cedula,telefono:fd.get('telefono').trim(),barrio_id:barrioId,voto_confirmado:false,registrado_por:state.user.id};
-    if(hasSupabase){const q=existing?db.from('votantes').update({...row,actualizado_en:new Date().toISOString()}).eq('id',existing.id).select().single():db.from('votantes').insert(row).select().single();const {data,error}=await q;if(error)throw error;if(existing)Object.assign(existing,data);else state.votantes.push(data)}else if(existing)Object.assign(existing,row);else state.votantes.push({id:uid(),voto_hora:null,...row});await audit(`${existing?'Actualizó':'Registró'} a ${row.nombre} en el padrón`);toast(existing?'Votante actualizado':'Votante agregado correctamente');
-  }})}
-  async function deleteVoter(id){const voter=state.votantes.find(v=>v.id===id);if(!voter||!confirm(`¿Eliminar definitivamente a ${voter.nombre}?`))return;try{if(hasSupabase){const {error}=await db.from('votantes').delete().eq('id',id);if(error)throw error;await loadAll()}else state.votantes=state.votantes.filter(v=>v.id!==id);await audit(`Eliminó del padrón a ${voter.nombre}`);renderAll();toast('Votante eliminado')}catch(e){toast(`No se pudo eliminar: ${e.message}`)}}
-  function openBarrio(existing=null){showModal({eyebrow:'ORGANIZACIÓN TERRITORIAL',title:existing?'Editar barrio':'Crear nuevo barrio',fields:`<label>Nombre del barrio<input name="nombre" required maxlength="80" value="${esc(existing?.nombre||'')}"></label><label>Descripción<input name="descripcion" maxlength="140" value="${esc(existing?.descripcion||'')}"></label>`,onSave:async fd=>{const row={nombre:fd.get('nombre').trim(),descripcion:fd.get('descripcion').trim(),activo:true};if(hasSupabase){const q=existing?db.from('barrios').update(row).eq('id',existing.id):db.from('barrios').insert(row);const {error}=await q;if(error)throw error;await loadAll()}else if(existing)Object.assign(existing,row);else state.barrios.push({id:uid(),...row});await audit(`${existing?'Actualizó':'Creó'} el barrio ${row.nombre}`);toast('Barrio guardado')}})}
-  async function deleteBarrio(id){const barrio=state.barrios.find(b=>b.id===id);if(!barrio)return;const usados=state.votantes.some(v=>v.barrio_id===id)||state.profiles.some(p=>p.barrio_id===id);if(usados){toast('Primero eliminá o reasigná sus votantes y encargados');return}if(!confirm(`¿Eliminar definitivamente el barrio ${barrio.nombre}?`))return;try{if(hasSupabase){const {error}=await db.from('barrios').delete().eq('id',id);if(error)throw error;await loadAll()}else state.barrios=state.barrios.filter(b=>b.id!==id);await audit(`Eliminó el barrio ${barrio.nombre}`);renderAll();toast('Barrio eliminado')}catch(e){toast(`No se pudo eliminar: ${e.message}`)}}
-  async function managerRequest(body){const {data:{session}}=await db.auth.getSession();if(!session)throw new Error('La sesión venció. Volvé a ingresar.');const res=await fetch(`${cfg.SUPABASE_URL}/functions/v1/crear-encargado`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`},body:JSON.stringify(body)});const result=await res.json();if(!res.ok)throw new Error(result.error||'No se pudo completar la operación');return result}
-  function openManager(existing=null){showModal({eyebrow:'CONTROL DE ACCESO',title:existing?'Editar encargado':'Crear encargado',fields:`<label>Nombre y apellido<input name="nombre" required maxlength="100" value="${esc(existing?.nombre||'')}"></label><label>Correo electrónico<input name="email" type="email" required value="${esc(existing?.email||'')}"></label><label>${existing?'Nueva contraseña (opcional)':'Contraseña temporal'}<input name="password" type="password" ${existing?'':'required'} minlength="8"></label>`,onSave:async fd=>{const row={action:existing?'update':'create',id:existing?.id,nombre:fd.get('nombre').trim(),email:fd.get('email').trim(),password:fd.get('password'),barrio_id:existing?.barrio_id||state.barrios[0]?.id};if(!row.barrio_id)throw new Error('No existe un registro base para crear la cuenta');if(hasSupabase){await managerRequest(row);await loadAll()}else if(existing)Object.assign(existing,row);else state.profiles.push({id:uid(),rol:'encargado',activo:true,...row});await audit(`${existing?'Actualizó':'Creó'} la cuenta de ${row.nombre}`);toast(existing?'Encargado actualizado':'Encargado creado con acceso general')}})}
-  async function deleteManager(id){const manager=state.profiles.find(p=>p.id===id);if(!manager||!confirm(`¿Eliminar definitivamente la cuenta de ${manager.nombre}?`))return;try{if(hasSupabase){await managerRequest({action:'delete',id});await loadAll()}else state.profiles=state.profiles.filter(p=>p.id!==id);await audit(`Eliminó la cuenta de ${manager.nombre}`);renderAll();toast('Encargado eliminado')}catch(e){toast(`No se pudo eliminar: ${e.message}`)}}
-  function exportCsv(){const rows=[['Nombre','Cedula','Telefono','Barrio','Estado','Hora'],...filteredVoters().map(v=>[v.nombre,v.cedula,v.telefono||'',barrioName(v.barrio_id),v.voto_confirmado?'Ya votó':'Pendiente',v.voto_hora||''])];const csv='\uFEFF'+rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(';')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`votantes-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href)}
-  function navigate(page){if(!document.getElementById(page))page='dashboard';$$('.page').forEach(p=>p.classList.toggle('active',p.id===page));$$('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));localStorage.setItem('control-electoral-page',page);$('.sidebar').classList.remove('open')}
+  function filteredList() {
+    const query = normalized($('#list-search').value), vote = $('#list-vote-filter').value, listState = $('#list-state-filter').value, transfer = $('#list-transfer-filter').value;
+    return joinedList().filter((row) => {
+      const haystack = normalized(`${row.voter.nombre} ${row.voter.cedula} ${row.encargado || ''} ${row.ciudad || ''}`);
+      return (!query || haystack.includes(query)) && (!vote || (vote === 'voted' ? row.voter.voto_confirmado : !row.voter.voto_confirmado)) && (!listState || row.estado_lista === listState) && (!transfer || (transfer === 'ok' ? row.traslado_ok : !row.traslado_ok));
+    });
+  }
+  function renderMyList() {
+    const list = filteredList(); $('#empty-list').classList.toggle('hidden', list.length > 0);
+    const {rows, pages} = pageRows(list, 'listPage');
+    $('#my-list-body').innerHTML = rows.map((row) => `<tr><td>${esc(row.voter.mesa ?? '—')}</td><td>${esc(row.voter.orden ?? '—')}</td><td>${esc(row.voter.cedula)}</td><td><strong>${esc(row.voter.nombre)}</strong></td><td>${esc(row.voter.institucion || '—')}</td><td>${esc(row.ciudad || '—')}</td><td>${esc(row.celular || '—')}</td><td>${esc(row.encargado || '—')}</td><td>${esc(row.gestion || 'Sin asignar')}</td><td><span class="status ${row.voter.voto_confirmado ? 'voted' : 'pending'}">${row.voter.voto_confirmado ? '✓ Sí' : '◷ Pendiente'}</span></td><td><span class="status ${row.estado_lista === 'agregado' ? 'voted' : 'excluded'}">${row.estado_lista === 'agregado' ? 'Agregado' : 'Excluido'}</span></td><td><button class="transfer-btn ${row.traslado_ok ? 'ok' : ''}" data-transfer="${row.id}">${row.traslado_ok ? '✓ OK' : 'Pendiente'}</button></td><td><div class="row-actions"><button class="action-btn" data-view-list="${row.votante_id}">Visualizar datos</button>${row.estado_lista === 'agregado' ? `<button class="action-btn danger" data-exclude="${row.id}">Excluir</button>` : `<button class="action-btn" data-restore="${row.id}">Restaurar</button>`}</div></td></tr>`).join('');
+    $$('[data-view-list]').forEach((button) => button.onclick = () => openListForm(button.dataset.viewList));
+    $$('[data-transfer]').forEach((button) => button.onclick = () => toggleTransfer(button.dataset.transfer));
+    $$('[data-exclude]').forEach((button) => button.onclick = () => setListState(button.dataset.exclude, 'excluido'));
+    $$('[data-restore]').forEach((button) => button.onclick = () => setListState(button.dataset.restore, 'agregado'));
+    renderPagination('#list-pagination', list.length, pages, 'listPage', renderMyList);
+  }
+  async function toggleVote(id, value) {
+    const voter = state.votantes.find((row) => row.id === id);
+    if (!voter || (!value && !confirm(`¿Deshacer la confirmación de ${voter.nombre}?`))) return;
+    try {
+      const {error} = await db.rpc('marcar_estado_voto', {p_votante_id:id, p_voto_confirmado:value});
+      if (error) throw error;
+      await refreshData(); toast(value ? 'Voto confirmado en tiempo real' : 'Confirmación deshecha');
+    } catch (error) { toast(`No se pudo guardar: ${error.message}`); }
+  }
+  function showModal({eyebrow, title, fields, onSave}) {
+    $('#modal-eyebrow').textContent = eyebrow; $('#modal-title').textContent = title; $('#modal-fields').innerHTML = fields;
+    const modal = $('#modal'); modal.showModal();
+    $('#modal-form').onsubmit = async (event) => {
+      event.preventDefault(); const save = $('#modal-save'); save.disabled = true;
+      try { await onSave(new FormData(event.currentTarget)); modal.close(); await refreshData(); }
+      catch (error) { toast(error.message); }
+      finally { save.disabled = false; }
+    };
+  }
+  function openListForm(voterId) {
+    const voter = state.votantes.find((row) => row.id === voterId), existing = listRecord(voterId);
+    if (!voter) return;
+    showModal({
+      eyebrow:existing ? 'SEGUIMIENTO ADMINISTRATIVO' : 'AGREGAR A MI LISTA', title:voter.nombre,
+      fields:`<div class="voter-reference">Mesa ${esc(voter.mesa ?? '—')} · Orden ${esc(voter.orden ?? '—')} · Cédula ${esc(voter.cedula)}</div><div class="form-grid"><label>Encargado<input name="encargado" required maxlength="120" value="${esc(existing?.encargado || '')}"></label><label>Celular<input name="celular" inputmode="tel" maxlength="30" value="${esc(existing?.celular || '')}"></label><label>Ciudad<input name="ciudad" required maxlength="100" value="${esc(existing?.ciudad || 'San Patricio')}"></label><label>Costo de traslado<input name="costo_traslado" type="number" min="0" step="1000" value="${esc(existing?.costo_traslado ?? '')}"></label><label>Tipo de gestión<select name="gestion"><option value="Sin asignar" ${!existing || existing.gestion === 'Sin asignar' ? 'selected' : ''}>Sin asignar</option><option value="Concejalía" ${existing?.gestion === 'Concejalía' ? 'selected' : ''}>Concejalía</option><option value="Intendencia + Concejalía" ${existing?.gestion === 'Intendencia + Concejalía' ? 'selected' : ''}>Intendencia + Concejalía</option></select></label><label>Estado en mi lista<select name="estado_lista"><option value="agregado" ${existing?.estado_lista !== 'excluido' ? 'selected' : ''}>Agregado en mi lista</option><option value="excluido" ${existing?.estado_lista === 'excluido' ? 'selected' : ''}>Excluido de mi lista</option></select></label></div><label>Observación<textarea name="observacion" maxlength="500" placeholder="Escribí la observación">${esc(existing?.observacion || '')}</textarea></label>`,
+      onSave:async (form) => {
+        const row = {votante_id:voterId, encargado:form.get('encargado').trim(), celular:form.get('celular').trim(), ciudad:form.get('ciudad').trim(), costo_traslado:form.get('costo_traslado') ? Number(form.get('costo_traslado')) : null, observacion:form.get('observacion').trim(), gestion:form.get('gestion'), estado_lista:form.get('estado_lista'), actualizado_en:new Date().toISOString()};
+        const query = existing ? db.from('mis_votantes').update(row).eq('id', existing.id) : db.from('mis_votantes').insert({...row, creado_por:state.user.id});
+        const {error} = await query; if (error) throw error;
+        toast(existing ? 'Datos actualizados' : 'Votante agregado a mi lista');
+      }
+    });
+  }
+  async function setListState(id, value) {
+    if (value === 'excluido' && !confirm('El registro seguirá visible, pero no contará en el resumen. ¿Continuar?')) return;
+    const {error} = await db.from('mis_votantes').update({estado_lista:value, actualizado_en:new Date().toISOString()}).eq('id', id);
+    if (error) return toast(`No se pudo actualizar: ${error.message}`);
+    await refreshData(); toast(value === 'excluido' ? 'Excluido de mi lista' : 'Restaurado en mi lista');
+  }
+  async function toggleTransfer(id) {
+    const row = state.lista.find((item) => item.id === id); if (!row) return;
+    const newValue = !row.traslado_ok;
+    const {error} = await db.from('mis_votantes').update({traslado_ok:newValue, actualizado_en:new Date().toISOString()}).eq('id', id);
+    if (error) return toast(`No se pudo actualizar: ${error.message}`);
+    await refreshData(); toast(newValue ? 'Traslado marcado como OK' : 'Traslado marcado pendiente');
+  }
+  async function managerRequest(body) {
+    const {data:{session}} = await db.auth.getSession(); if (!session) throw new Error('La sesión venció. Volvé a ingresar.');
+    const response = await fetch(`${cfg.SUPABASE_URL}/functions/v1/crear-encargado`, {method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`}, body:JSON.stringify(body)});
+    const result = await response.json(); if (!response.ok) throw new Error(result.error || 'No se pudo completar la operación'); return result;
+  }
+  function renderManagers() {
+    $('#managers-grid').innerHTML = state.profiles.filter((profile) => profile.rol === 'encargado').map((profile) => `<article class="entity-card"><div class="entity-card-top"><div class="manager-head"><div class="avatar">${initials(profile.nombre)}</div><div><h4>${esc(profile.nombre)}</h4><p>${esc(profile.email)}</p></div></div><div class="card-actions"><button class="action-btn" data-edit-manager="${profile.id}">Editar</button><button class="action-btn danger" data-delete-manager="${profile.id}">Eliminar</button></div></div><div class="mini-stats"><span>Perfil de consulta general</span><strong>${profile.activo ? 'Activo' : 'Inactivo'}</strong></div></article>`).join('') || '<div class="empty">Todavía no hay usuarios de consulta.</div>';
+    $$('[data-edit-manager]').forEach((button) => button.onclick = () => openManager(state.profiles.find((profile) => profile.id === button.dataset.editManager)));
+    $$('[data-delete-manager]').forEach((button) => button.onclick = () => deleteManager(button.dataset.deleteManager));
+  }
+  function openManager(existing = null) {
+    showModal({eyebrow:'CONTROL DE ACCESO', title:existing ? 'Editar usuario' : 'Crear usuario de consulta', fields:`<label>Nombre y apellido<input name="nombre" required maxlength="100" value="${esc(existing?.nombre || '')}"></label><label>Correo electrónico<input name="email" type="email" required value="${esc(existing?.email || '')}"></label><label>${existing ? 'Nueva contraseña (opcional)' : 'Contraseña temporal'}<input name="password" type="password" ${existing ? '' : 'required'} minlength="8"></label>`, onSave:async (form) => {await managerRequest({action:existing ? 'update' : 'create', id:existing?.id, nombre:form.get('nombre').trim(), email:form.get('email').trim(), password:form.get('password')}); toast(existing ? 'Usuario actualizado' : 'Usuario de consulta creado');}});
+  }
+  async function deleteManager(id) {
+    const manager = state.profiles.find((profile) => profile.id === id);
+    if (!manager || !confirm(`¿Eliminar definitivamente la cuenta de ${manager.nombre}?`)) return;
+    try { await managerRequest({action:'delete', id}); await refreshData(); toast('Usuario eliminado'); }
+    catch (error) { toast(`No se pudo eliminar: ${error.message}`); }
+  }
+  function navigate(page) {
+    if (!document.getElementById(page) || (!isAdmin() && page !== 'votantes')) page = isAdmin() ? 'dashboard' : 'votantes';
+    $$('.page').forEach((element) => element.classList.toggle('active', element.id === page));
+    $$('#nav button').forEach((button) => button.classList.toggle('active', button.dataset.page === page));
+    localStorage.setItem('control-electoral-page', page);
+  }
 
-  $('#login-form').onsubmit=async e=>{e.preventDefault();const btn=e.currentTarget.querySelector('button');btn.disabled=true;btn.textContent='Ingresando…';try{await login($('#email').value.trim(),$('#password').value)}catch(err){toast(err.message)}finally{btn.disabled=false;btn.textContent='Ingresar'}};
-  $('#logout').onclick=async()=>{if(hasSupabase){await db.auth.signOut();if(state.channel)await db.removeChannel(state.channel)}location.reload()};
-  $('#modal-close').onclick=()=>$('#modal').close();$('#modal-cancel').onclick=()=>$('#modal').close();
-  $$('#nav button').forEach(b=>b.onclick=()=>navigate(b.dataset.page));$('#menu').onclick=()=>$('.sidebar').classList.toggle('open');
-  ['#voter-search','#filter-status'].forEach(s=>$(s).addEventListener(s==='#voter-search'?'input':'change',renderVoters));
-  $('#new-manager').onclick=()=>openManager();
+  $('#login-form').onsubmit = async (event) => {event.preventDefault(); const button = event.currentTarget.querySelector('button'); button.disabled = true; button.textContent = 'Ingresando…'; try {await login($('#email').value.trim(), $('#password').value);} catch (error) {toast(error.message);} finally {button.disabled = false; button.textContent = 'Ingresar';}};
+  $('#logout').onclick = async () => {await db.auth.signOut(); if (state.channel) await db.removeChannel(state.channel); localStorage.removeItem('control-electoral-page'); location.reload();};
+  $('#modal-close').onclick = () => $('#modal').close(); $('#modal-cancel').onclick = () => $('#modal').close();
+  $$('#nav button').forEach((button) => button.onclick = () => navigate(button.dataset.page)); $('#new-manager').onclick = () => openManager();
+  $('#voter-search').addEventListener('input', () => {state.voterPage = 1; renderVoters();});
+  $('#filter-status').addEventListener('change', () => {state.voterPage = 1; renderVoters();});
+  ['#list-search','#list-vote-filter','#list-state-filter','#list-transfer-filter'].forEach((selector) => $(selector).addEventListener(selector === '#list-search' ? 'input' : 'change', () => {state.listPage = 1; renderMyList();}));
 
-  async function restoreSession(){
-    if(!hasSupabase)return;
-    try{
-      const {data:{session}}=await db.auth.getSession();if(!session)return;
-      const {data:profile,error}=await db.from('perfiles').select('*').eq('id',session.user.id).single();
-      if(error||!profile?.activo){await db.auth.signOut();return}
-      state.user=profile;await loadAll();subscribeRealtime();enterApp();
-    }catch(e){console.warn('No se pudo restaurar la sesión:',e.message)}
+  async function restoreSession() {
+    if (!hasSupabase) return;
+    try {
+      const {data:{session}} = await db.auth.getSession(); if (!session) return;
+      const {data:profile, error} = await db.from('perfiles').select('*').eq('id', session.user.id).single();
+      if (error || !profile?.activo) {await db.auth.signOut(); return;}
+      state.user = profile; await loadAll(); subscribeRealtime(); enterApp();
+    } catch (error) {console.warn('No se pudo restaurar la sesión:', error.message);}
   }
   restoreSession();
 })();

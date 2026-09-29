@@ -46,24 +46,25 @@
       <header class="topbar">
         <button id="menu" class="icon-btn" aria-label="Abrir menú">☰</button>
         <nav id="nav" aria-label="Navegación principal">
-          <button data-page="dashboard" class="active"><span>▦</span> Resumen</button>
-          <button data-page="votantes"><span>☷</span> Votantes</button>
-          <button data-page="encargados" data-admin><span>♙</span> Encargados</button>
+          <button data-page="dashboard" class="active" data-admin><span>▦</span> Resumen</button>
+          <button data-page="votantes"><span>☷</span> Padrón general</button>
+          <button data-page="mi-lista" data-admin><span>★</span> Mis votantes</button>
+          <button data-page="encargados" data-admin><span>♙</span> Usuarios</button>
         </nav>
         <div class="live"><i></i><span>En vivo</span></div>
       </header>
 
-      <section id="dashboard" class="page active">
+      <section id="dashboard" class="page active" data-admin>
         <div class="stats">
           <article><span class="stat-icon teal">♙</span><div><small>Total registrados</small><strong id="stat-total">0</strong><em>personas</em></div></article>
           <article><span class="stat-icon green">✓</span><div><small>Ya votaron</small><strong id="stat-voted">0</strong><em id="stat-percent">0% del padrón</em></div></article>
           <article><span class="stat-icon amber">◷</span><div><small>Pendientes</small><strong id="stat-pending">0</strong><em>por confirmar</em></div></article>
-          <article data-admin><span class="stat-icon blue">⌂</span><div><small>Barrios activos</small><strong id="stat-barrios">0</strong><em>zonas asignadas</em></div></article>
+          <article><span class="stat-icon blue">★</span><div><small>Excluidos</small><strong id="stat-excluded">0</strong><em>se mantienen para consulta</em></div></article>
         </div>
         <div class="grid-main">
-          <article class="panel" data-admin>
-            <div class="panel-head"><div><h3>Avance por barrio</h3><p>Participación registrada hasta el momento</p></div><span id="update-time" class="chip">Actualizado ahora</span></div>
-            <div id="barrio-progress" class="progress-list"></div>
+          <article class="panel">
+            <div class="panel-head"><div><h3>Avance de mi lista</h3><p>Seguimiento de los votantes incorporados</p></div><span id="update-time" class="chip">Actualizado ahora</span></div>
+            <div id="list-progress" class="progress-list"></div>
           </article>
           <article class="panel activity-panel">
             <div class="panel-head"><div><h3>Actividad reciente</h3><p>Últimas confirmaciones</p></div></div>
@@ -73,19 +74,36 @@
       </section>
 
       <section id="votantes" class="page">
+        <div class="section-action compact-heading"><div><h3>Padrón general</h3><p>Consulta el padrón y confirma rápidamente si una persona ya votó.</p></div></div>
         <div class="toolbar">
           <div class="search"><span>⌕</span><input id="voter-search" inputmode="search" placeholder="Buscar por cédula, apellido o nombre…" /></div>
           <select id="filter-status" aria-label="Filtrar por estado"><option value="">Todos los estados</option><option value="voted">Ya votaron</option><option value="pending">Pendientes</option></select>
         </div>
         <div id="lookup-result" class="lookup-result hidden" role="status" aria-live="polite"></div>
         <article class="panel table-panel">
-          <div class="table-wrap"><table><thead><tr><th>Mesa</th><th>Orden</th><th>Cédula</th><th>Apellido y Nombre</th><th>Fec. Nac.</th><th>Partido</th><th>Edad</th><th>Tipo de Voto</th><th>Tipo Inscrip.</th><th>Institución</th><th>Estado</th><th>Confirmar</th></tr></thead><tbody id="voters-body"></tbody></table></div>
+          <div class="table-wrap"><table class="padron-table"><thead><tr><th>Mesa</th><th>Orden</th><th>Cédula</th><th>Apellido y Nombre</th><th>Fec. Nac.</th><th>Partido</th><th>Edad</th><th>Tipo de Voto</th><th>Tipo Inscrip.</th><th>Institución</th><th>Estado</th><th>Confirmar</th><th data-admin>Mi lista</th></tr></thead><tbody id="voters-body"></tbody></table></div>
           <div id="empty-voters" class="empty hidden">No se encontraron votantes.</div>
+          <div id="voters-pagination" class="pagination"></div>
+        </article>
+      </section>
+
+      <section id="mi-lista" class="page" data-admin>
+        <div class="section-action compact-heading"><div><h3>Mis votantes</h3><p>Seguimiento administrativo de las personas agregadas a la lista.</p></div></div>
+        <div class="toolbar">
+          <div class="search"><span>⌕</span><input id="list-search" inputmode="search" placeholder="Buscar por cédula, nombre, encargado o ciudad…" /></div>
+          <select id="list-vote-filter"><option value="">Voto: todos</option><option value="voted">Ya votó</option><option value="pending">Pendiente</option></select>
+          <select id="list-state-filter"><option value="">Lista: todos</option><option value="agregado">Agregados</option><option value="excluido">Excluidos</option></select>
+          <select id="list-transfer-filter"><option value="">Traslado: todos</option><option value="ok">OK</option><option value="pending">Pendiente</option></select>
+        </div>
+        <article class="panel table-panel">
+          <div class="table-wrap"><table class="my-list-table"><thead><tr><th>Mesa</th><th>Orden</th><th>Cédula</th><th>Apellido y Nombre</th><th>Institución</th><th>Ciudad</th><th>Celular</th><th>Encargado</th><th>Gestión</th><th>Voto</th><th>Mi lista</th><th>Traslado</th><th>Acciones</th></tr></thead><tbody id="my-list-body"></tbody></table></div>
+          <div id="empty-list" class="empty hidden">Todavía no agregaste votantes a tu lista.</div>
+          <div id="list-pagination" class="pagination"></div>
         </article>
       </section>
 
       <section id="encargados" class="page">
-        <div class="section-action"><div><h3>Equipo de encargados</h3><p>Cada cuenta accede al padrón general y puede confirmar votos.</p></div><button id="new-manager" class="btn primary">＋ Crear encargado</button></div>
+        <div class="section-action"><div><h3>Usuarios de consulta</h3><p>Cada cuenta accede al padrón general y puede confirmar votos.</p></div><button id="new-manager" class="btn primary">＋ Crear usuario</button></div>
         <div id="managers-grid" class="cards-grid"></div>
       </section>
 
