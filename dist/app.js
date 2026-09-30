@@ -11,6 +11,7 @@
   const normalized = (value = '') => String(value).trim().toLocaleLowerCase('es');
   const initials = (name = '') => name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   const fmtTime = (value) => value ? new Date(value).toLocaleString('es-PY', {dateStyle:'short', timeStyle:'short'}) : '—';
+  const fmtDate = (value) => value ? new Date(`${value}T00:00:00`).toLocaleDateString('es-PY') : '—';
   const PAGE_SIZE = 50;
 
   const state = {user:null, profiles:[], votantes:[], lista:[], channel:null, voterPage:1, listPage:1};
@@ -78,8 +79,11 @@
     const active = state.lista.filter((row) => row.estado_lista === 'agregado');
     const voterMap = new Map(state.votantes.map((voter) => [voter.id, voter]));
     const voted = active.filter((row) => voterMap.get(row.votante_id)?.voto_confirmado).length;
-    $('#stat-total').textContent = active.length; $('#stat-voted').textContent = voted;
+    const transferOk = active.filter((row) => row.traslado_ok).length;
+    $('#stat-total').textContent = active.length;
+    $('#stat-voted').textContent = voted;
     $('#stat-pending').textContent = active.length - voted;
+    $('#stat-transfer').textContent = transferOk;
     $('#stat-percent').textContent = `${active.length ? Math.round(voted / active.length * 100) : 0}% de mi lista`;
     $('#stat-excluded').textContent = state.lista.filter((row) => row.estado_lista === 'excluido').length;
     $('#update-time').textContent = `Actualizado ${new Date().toLocaleTimeString('es-PY', {hour:'2-digit', minute:'2-digit'})}`;
@@ -96,11 +100,11 @@
   function renderActivity() {
     const activeIds = new Set(state.lista.filter((row) => row.estado_lista === 'agregado').map((row) => row.votante_id));
     const recent = state.votantes.filter((voter) => voter.voto_confirmado && activeIds.has(voter.id)).sort((a, b) => new Date(b.voto_hora) - new Date(a.voto_hora)).slice(0, 8);
-    $('#recent-activity').innerHTML = recent.map((voter) => `<div class="activity-item"><span class="activity-icon">✓</span><div><strong>${esc(voter.nombre)} confirmó su voto</strong><span>${fmtTime(voter.voto_hora)}</span></div></div>`).join('') || '<div class="empty">Sin actividad reciente en tu lista.</div>';
+    $('#recent-activity').innerHTML = recent.map((voter) => `<div class="activity-item"><span class="activity-icon">✓</span><div><strong>${esc(voter.nombre_completo || voter.nombre || 'Votante')} confirmó su voto</strong><span>${fmtTime(voter.voto_hora)}</span></div></div>`).join('') || '<div class="empty">Sin actividad reciente en tu lista.</div>';
   }
   function filteredVoters() {
     const query = normalized($('#voter-search').value), queryDigits = digits(query), status = $('#filter-status').value;
-    return state.votantes.filter((voter) => (!query || normalized(voter.nombre).includes(query) || (queryDigits && digits(voter.cedula).includes(queryDigits))) && (!status || (status === 'voted' ? voter.voto_confirmado : !voter.voto_confirmado)));
+    return state.votantes.filter((voter) => (!query || normalized(voter.nombre_completo || voter.nombre || '').includes(query) || (queryDigits && digits(voter.cedula).includes(queryDigits))) && (!status || (status === 'voted' ? voter.voto_confirmado : !voter.voto_confirmado)));
   }
   function renderLookupResult(list) {
     const box = $('#lookup-result'), query = $('#voter-search').value.trim();
@@ -108,7 +112,7 @@
     const exact = digits(query).length >= 4 ? list.find((voter) => digits(voter.cedula) === digits(query)) : null;
     if (exact) {
       box.className = `lookup-result ${exact.voto_confirmado ? 'already-voted' : 'not-voted'}`;
-      box.innerHTML = `<span class="lookup-icon">${exact.voto_confirmado ? '✓' : '◷'}</span><div><small>Resultado por cédula</small><strong>${exact.voto_confirmado ? 'YA VOTÓ' : 'TODAVÍA NO VOTÓ'}</strong><p>${esc(exact.nombre)} · C.I. ${esc(exact.cedula)}</p></div>`;
+      box.innerHTML = `<span class="lookup-icon">${exact.voto_confirmado ? '✓' : '◷'}</span><div><small>Resultado por cédula</small><strong>${exact.voto_confirmado ? 'YA VOTÓ' : 'TODAVÍA NO VOTÓ'}</strong><p>${esc(exact.nombre_completo || exact.nombre || 'Votante')} · C.I. ${esc(exact.cedula)}</p></div>`;
     } else if (!list.length) {
       box.className = 'lookup-result not-found'; box.innerHTML = '<span class="lookup-icon">!</span><div><small>Sin coincidencias</small><strong>NO ESTÁ EN EL SISTEMA</strong><p>Revisá la cédula o el nombre.</p></div>';
     } else {
@@ -133,8 +137,13 @@
     const {rows, pages} = pageRows(list, 'voterPage');
     $('#voters-body').innerHTML = rows.map((voter) => {
       const listed = listRecord(voter.id);
-      const listButton = !isAdmin() ? '' : listed ? `<button class="list-state-btn ${listed.estado_lista}" data-open-list="${voter.id}">${listed.estado_lista === 'agregado' ? '★ Agregado' : 'Excluido'}</button>` : `<button class="add-list-btn" data-add-list="${voter.id}">＋ Agregar</button>`;
-      return `<tr><td>${esc(voter.mesa ?? '—')}</td><td>${esc(voter.orden ?? '—')}</td><td>${esc(voter.cedula)}</td><td><strong>${esc(voter.nombre)}</strong></td><td>${esc(voter.fecha_nacimiento || '—')}</td><td>${esc(voter.partido || '—')}</td><td>${esc(voter.edad ?? '—')}</td><td>${esc(voter.tipo_voto || '—')}</td><td>${esc(voter.tipo_inscripcion || '—')}</td><td>${esc(voter.institucion || '—')}</td><td><span class="status ${voter.voto_confirmado ? 'voted' : 'pending'}">${voter.voto_confirmado ? '✓ Ya votó' : '◷ Pendiente'}</span></td><td><div class="row-actions">${voter.voto_confirmado ? `<button class="undo-btn" data-vote="${voter.id}" data-value="false">Deshacer</button>` : `<button class="vote-btn" data-vote="${voter.id}" data-value="true">✓ Marcar votó</button>`}</div></td>${isAdmin() ? `<td>${listButton}</td>` : ''}</tr>`;
+      const listButton = !isAdmin() ? '' : listed
+        ? `<button class="list-state-btn ${listed.estado_lista}" data-open-list="${voter.id}">${listed.estado_lista === 'agregado' ? '★ Agregado a mi lista' : 'Excluido de mi lista'}</button>`
+        : `<button class="add-list-btn" data-add-list="${voter.id}">＋ Agregar a mi lista</button>`;
+      const voteAction = voter.voto_confirmado
+        ? (isAdmin() ? `<button class="undo-btn" data-vote="${voter.id}" data-value="false">Deshacer</button>` : `<span class="locked-state">Confirmado</span>`)
+        : `<button class="vote-btn" data-vote="${voter.id}" data-value="true">✓ Marcar votó</button>`;
+      return `<tr><td>${esc(voter.mesa ?? '—')}</td><td>${esc(voter.orden ?? voter.numero_orden ?? '—')}</td><td>${esc(voter.cedula)}</td><td><strong>${esc(voter.nombre_completo || voter.nombre || '—')}</strong></td><td>${esc(voter.fecha_nacimiento ? fmtDate(voter.fecha_nacimiento) : '—')}</td><td>${esc(voter.partido || '—')}</td><td>${esc(voter.edad ?? '—')}</td><td>${esc(voter.tipo_voto || '—')}</td><td>${esc(voter.tipo_inscripcion || '—')}</td><td>${esc(voter.institucion || '—')}</td><td><span class="status ${voter.voto_confirmado ? 'voted' : 'pending'}">${voter.voto_confirmado ? '✓ Ya votó' : '◷ Pendiente'}</span></td><td><div class="row-actions">${voteAction}</div></td>${isAdmin() ? `<td>${listButton}</td>` : ''}</tr>`;
     }).join('');
     $$('[data-vote]').forEach((button) => button.onclick = () => toggleVote(button.dataset.vote, button.dataset.value === 'true'));
     $$('[data-add-list]').forEach((button) => button.onclick = () => openListForm(button.dataset.addList));
@@ -148,14 +157,14 @@
   function filteredList() {
     const query = normalized($('#list-search').value), vote = $('#list-vote-filter').value, listState = $('#list-state-filter').value, transfer = $('#list-transfer-filter').value;
     return joinedList().filter((row) => {
-      const haystack = normalized(`${row.voter.nombre} ${row.voter.cedula} ${row.encargado || ''} ${row.ciudad || ''}`);
+      const haystack = normalized(`${row.voter.nombre_completo || row.voter.nombre || ''} ${row.voter.cedula} ${row.encargado || ''} ${row.ciudad || ''}`);
       return (!query || haystack.includes(query)) && (!vote || (vote === 'voted' ? row.voter.voto_confirmado : !row.voter.voto_confirmado)) && (!listState || row.estado_lista === listState) && (!transfer || (transfer === 'ok' ? row.traslado_ok : !row.traslado_ok));
     });
   }
   function renderMyList() {
     const list = filteredList(); $('#empty-list').classList.toggle('hidden', list.length > 0);
     const {rows, pages} = pageRows(list, 'listPage');
-    $('#my-list-body').innerHTML = rows.map((row) => `<tr><td>${esc(row.voter.mesa ?? '—')}</td><td>${esc(row.voter.orden ?? '—')}</td><td>${esc(row.voter.cedula)}</td><td><strong>${esc(row.voter.nombre)}</strong></td><td>${esc(row.voter.institucion || '—')}</td><td>${esc(row.ciudad || '—')}</td><td>${esc(row.celular || '—')}</td><td>${esc(row.encargado || '—')}</td><td>${esc(row.gestion || 'Sin asignar')}</td><td><span class="status ${row.voter.voto_confirmado ? 'voted' : 'pending'}">${row.voter.voto_confirmado ? '✓ Sí' : '◷ Pendiente'}</span></td><td><span class="status ${row.estado_lista === 'agregado' ? 'voted' : 'excluded'}">${row.estado_lista === 'agregado' ? 'Agregado' : 'Excluido'}</span></td><td><button class="transfer-btn ${row.traslado_ok ? 'ok' : ''}" data-transfer="${row.id}">${row.traslado_ok ? '✓ OK' : 'Pendiente'}</button></td><td><div class="row-actions"><button class="action-btn" data-view-list="${row.votante_id}">Visualizar datos</button>${row.estado_lista === 'agregado' ? `<button class="action-btn danger" data-exclude="${row.id}">Excluir</button>` : `<button class="action-btn" data-restore="${row.id}">Restaurar</button>`}</div></td></tr>`).join('');
+    $('#my-list-body').innerHTML = rows.map((row) => `<tr><td>${esc(row.voter.mesa ?? '—')}</td><td>${esc(row.voter.orden ?? row.voter.numero_orden ?? '—')}</td><td>${esc(row.voter.cedula)}</td><td><strong>${esc(row.voter.nombre_completo || row.voter.nombre || '—')}</strong></td><td>${esc(row.voter.institucion || '—')}</td><td>${esc(row.ciudad || '—')}</td><td>${esc(row.celular || '—')}</td><td>${esc(row.encargado || '—')}</td><td>${esc(row.gestion || 'Sin asignar')}</td><td><span class="status ${row.voter.voto_confirmado ? 'voted' : 'pending'}">${row.voter.voto_confirmado ? '✓ Ya votó' : '◷ Pendiente'}</span></td><td><span class="status ${row.estado_lista === 'agregado' ? 'voted' : 'excluded'}">${row.estado_lista === 'agregado' ? 'Agregado en mi lista' : 'Excluido de mi lista'}</span></td><td><button class="transfer-btn ${row.traslado_ok ? 'ok' : ''}" data-transfer="${row.id}">${row.traslado_ok ? '✓ OK' : 'Pendiente'}</button></td><td><div class="row-actions"><button class="action-btn view" data-view-list="${row.votante_id}">Visualizar datos</button>${row.estado_lista === 'agregado' ? `<button class="action-btn danger" data-exclude="${row.id}">Excluir de mi lista</button>` : `<button class="action-btn" data-restore="${row.id}">Restaurar a mi lista</button>`}</div></td></tr>`).join('');
     $$('[data-view-list]').forEach((button) => button.onclick = () => openListForm(button.dataset.viewList));
     $$('[data-transfer]').forEach((button) => button.onclick = () => toggleTransfer(button.dataset.transfer));
     $$('[data-exclude]').forEach((button) => button.onclick = () => setListState(button.dataset.exclude, 'excluido'));
@@ -163,8 +172,9 @@
     renderPagination('#list-pagination', list.length, pages, 'listPage', renderMyList);
   }
   async function toggleVote(id, value) {
+    if (!value && !isAdmin()) return toast('Solo el administrador puede deshacer una confirmación.');
     const voter = state.votantes.find((row) => row.id === id);
-    if (!voter || (!value && !confirm(`¿Deshacer la confirmación de ${voter.nombre}?`))) return;
+    if (!voter || (!value && !confirm(`¿Deshacer la confirmación de ${voter.nombre_completo || voter.nombre || 'este votante'}?`))) return;
     try {
       const {error} = await db.rpc('marcar_estado_voto', {p_votante_id:id, p_voto_confirmado:value});
       if (error) throw error;
@@ -182,16 +192,37 @@
     };
   }
   function openListForm(voterId) {
+    if (!isAdmin()) return;
     const voter = state.votantes.find((row) => row.id === voterId), existing = listRecord(voterId);
     if (!voter) return;
+    const fullName = voter.nombre_completo || voter.nombre || 'Sin nombre';
+    const info = [
+      ['Mesa', voter.mesa], ['Orden', voter.orden ?? voter.numero_orden], ['Cédula', voter.cedula],
+      ['Apellido y Nombre', fullName], ['Fecha de nacimiento', voter.fecha_nacimiento ? fmtDate(voter.fecha_nacimiento) : null],
+      ['Partido', voter.partido], ['Edad', voter.edad], ['Tipo de voto', voter.tipo_voto],
+      ['Tipo de inscripción', voter.tipo_inscripcion], ['Institución', voter.institucion]
+    ];
+    const infoHtml = info.map(([label, value]) => `<div class="detail-item"><span>${esc(label)}</span><strong>${esc(value ?? '—')}</strong></div>`).join('');
+    const stateField = existing ? `<label>Estado en mi lista<select name="estado_lista"><option value="agregado" ${existing.estado_lista !== 'excluido' ? 'selected' : ''}>Agregado en mi lista</option><option value="excluido" ${existing.estado_lista === 'excluido' ? 'selected' : ''}>Excluido de mi lista</option></select></label>` : '';
     showModal({
-      eyebrow:existing ? 'SEGUIMIENTO ADMINISTRATIVO' : 'AGREGAR A MI LISTA', title:voter.nombre,
-      fields:`<div class="voter-reference">Mesa ${esc(voter.mesa ?? '—')} · Orden ${esc(voter.orden ?? '—')} · Cédula ${esc(voter.cedula)}</div><div class="form-grid"><label>Encargado<input name="encargado" required maxlength="120" value="${esc(existing?.encargado || '')}"></label><label>Celular<input name="celular" inputmode="tel" maxlength="30" value="${esc(existing?.celular || '')}"></label><label>Ciudad<input name="ciudad" required maxlength="100" value="${esc(existing?.ciudad || 'San Patricio')}"></label><label>Costo de traslado<input name="costo_traslado" type="number" min="0" step="1000" value="${esc(existing?.costo_traslado ?? '')}"></label><label>Tipo de gestión<select name="gestion"><option value="Sin asignar" ${!existing || existing.gestion === 'Sin asignar' ? 'selected' : ''}>Sin asignar</option><option value="Concejalía" ${existing?.gestion === 'Concejalía' ? 'selected' : ''}>Concejalía</option><option value="Intendencia + Concejalía" ${existing?.gestion === 'Intendencia + Concejalía' ? 'selected' : ''}>Intendencia + Concejalía</option></select></label><label>Estado en mi lista<select name="estado_lista"><option value="agregado" ${existing?.estado_lista !== 'excluido' ? 'selected' : ''}>Agregado en mi lista</option><option value="excluido" ${existing?.estado_lista === 'excluido' ? 'selected' : ''}>Excluido de mi lista</option></select></label></div><label>Observación<textarea name="observacion" maxlength="500" placeholder="Escribí la observación">${esc(existing?.observacion || '')}</textarea></label>`,
+      eyebrow:existing ? 'VISUALIZAR DATOS' : 'AGREGAR A MI LISTA',
+      title:fullName,
+      fields:`<section class="detail-card"><div class="detail-card-head"><div><span class="eyebrow">DATOS DEL PADRÓN</span><h4>Información del registro</h4></div><span class="status ${voter.voto_confirmado ? 'voted' : 'pending'}">${voter.voto_confirmado ? '✓ Ya votó' : '◷ Pendiente'}</span></div><div class="detail-grid">${infoHtml}</div></section><section class="admin-card"><div class="admin-card-head"><div><span class="eyebrow">DATOS ADMINISTRATIVOS</span><h4>${existing ? 'Seguimiento y edición' : 'Completar para agregar a mi lista'}</h4></div>${existing ? `<span class="list-pill ${existing.estado_lista}">${existing.estado_lista === 'agregado' ? 'Agregado a mi lista' : 'Excluido de mi lista'}</span>` : ''}</div><div class="form-grid"><label>Encargado<input name="encargado" required maxlength="120" value="${esc(existing?.encargado || '')}" placeholder="Nombre del encargado"></label><label>Celular<input name="celular" inputmode="tel" maxlength="30" value="${esc(existing?.celular || '')}" placeholder="Ej.: 0981 000 000"></label><label>Ciudad<input name="ciudad" required maxlength="100" value="${esc(existing?.ciudad || 'San Patricio')}"></label><label>Costo de Traslado<input name="costo_traslado" type="number" min="0" step="1000" value="${esc(existing?.costo_traslado ?? '')}" placeholder="0"></label><label>Gestión<select name="gestion"><option value="Sin asignar" ${!existing || existing.gestion === 'Sin asignar' ? 'selected' : ''}>Sin asignar</option><option value="Concejalía" ${existing?.gestion === 'Concejalía' ? 'selected' : ''}>Concejalía</option><option value="Intendencia + Concejalía" ${existing?.gestion === 'Intendencia + Concejalía' ? 'selected' : ''}>Intendencia + Concejalía</option></select></label>${stateField}</div><label>Observación<textarea name="observacion" maxlength="500" placeholder="Escribí la observación">${esc(existing?.observacion || '')}</textarea></label></section>`,
       onSave:async (form) => {
-        const row = {votante_id:voterId, encargado:form.get('encargado').trim(), celular:form.get('celular').trim(), ciudad:form.get('ciudad').trim(), costo_traslado:form.get('costo_traslado') ? Number(form.get('costo_traslado')) : null, observacion:form.get('observacion').trim(), gestion:form.get('gestion'), estado_lista:form.get('estado_lista'), actualizado_en:new Date().toISOString()};
+        const row = {
+          votante_id:voterId,
+          encargado:form.get('encargado').trim(),
+          celular:form.get('celular').trim(),
+          ciudad:form.get('ciudad').trim(),
+          costo_traslado:form.get('costo_traslado') ? Number(form.get('costo_traslado')) : null,
+          observacion:form.get('observacion').trim(),
+          gestion:form.get('gestion'),
+          estado_lista:existing ? form.get('estado_lista') : 'agregado',
+          actualizado_en:new Date().toISOString()
+        };
         const query = existing ? db.from('mis_votantes').update(row).eq('id', existing.id) : db.from('mis_votantes').insert({...row, creado_por:state.user.id});
         const {error} = await query; if (error) throw error;
-        toast(existing ? 'Datos actualizados' : 'Votante agregado a mi lista');
+        toast(existing ? 'Datos actualizados correctamente' : 'Agregado a mi lista');
       }
     });
   }

@@ -19,7 +19,7 @@
       <div>
         <span class="eyebrow">SAN PATRICIO · MISIONES</span>
         <h1>Control Electoral</h1>
-        <p>Seguimiento seguro y en tiempo real por barrios.</p>
+        <p>Seguimiento seguro y en tiempo real del padrón general y tu lista de votantes.</p>
       </div>
       <div class="pulse-card"><span></span> Sistema preparado para sincronización en vivo</div>
     </section>
@@ -55,11 +55,13 @@
       </header>
 
       <section id="dashboard" class="page active" data-admin>
+        <div class="page-intro"><div><span class="eyebrow">PANEL DE CONTROL</span><h2>Resumen de mi lista</h2><p>Seguimiento en tiempo real de los votantes incorporados, sus votos y traslados.</p></div><span class="page-badge"><i></i> Actualización en vivo</span></div>
         <div class="stats">
-          <article><span class="stat-icon teal">♙</span><div><small>Total registrados</small><strong id="stat-total">0</strong><em>personas</em></div></article>
-          <article><span class="stat-icon green">✓</span><div><small>Ya votaron</small><strong id="stat-voted">0</strong><em id="stat-percent">0% del padrón</em></div></article>
+          <article><span class="stat-icon teal">★</span><div><small>Total en mi lista</small><strong id="stat-total">0</strong><em>registros activos</em></div></article>
+          <article><span class="stat-icon green">✓</span><div><small>Ya votaron</small><strong id="stat-voted">0</strong><em id="stat-percent">0% de mi lista</em></div></article>
           <article><span class="stat-icon amber">◷</span><div><small>Pendientes</small><strong id="stat-pending">0</strong><em>por confirmar</em></div></article>
-          <article><span class="stat-icon blue">★</span><div><small>Excluidos</small><strong id="stat-excluded">0</strong><em>se mantienen para consulta</em></div></article>
+          <article><span class="stat-icon blue">↗</span><div><small>Traslados OK</small><strong id="stat-transfer">0</strong><em>completados</em></div></article>
+          <article><span class="stat-icon rose">−</span><div><small>Excluidos</small><strong id="stat-excluded">0</strong><em>visibles, no contabilizan</em></div></article>
         </div>
         <div class="grid-main">
           <article class="panel">
@@ -74,7 +76,7 @@
       </section>
 
       <section id="votantes" class="page">
-        <div class="section-action compact-heading"><div><h3>Padrón general</h3><p>Consulta el padrón y confirma rápidamente si una persona ya votó.</p></div></div>
+        <div class="page-intro compact"><div><span class="eyebrow">PADRÓN GENERAL</span><h2>Consulta de votantes</h2><p>Buscá por cédula, apellido o nombre y confirmá el estado de voto.</p></div><span class="page-badge neutral">Consulta rápida</span></div>
         <div class="toolbar">
           <div class="search"><span>⌕</span><input id="voter-search" inputmode="search" placeholder="Buscar por cédula, apellido o nombre…" /></div>
           <select id="filter-status" aria-label="Filtrar por estado"><option value="">Todos los estados</option><option value="voted">Ya votaron</option><option value="pending">Pendientes</option></select>
@@ -88,7 +90,7 @@
       </section>
 
       <section id="mi-lista" class="page" data-admin>
-        <div class="section-action compact-heading"><div><h3>Mis votantes</h3><p>Seguimiento administrativo de las personas agregadas a la lista.</p></div></div>
+        <div class="page-intro compact"><div><span class="eyebrow">MIS VOTANTES</span><h2>Seguimiento de mi lista</h2><p>Administrá los datos, el estado de voto, la permanencia en la lista y el traslado.</p></div><span class="page-badge"><i></i> Solo administrador</span></div>
         <div class="toolbar">
           <div class="search"><span>⌕</span><input id="list-search" inputmode="search" placeholder="Buscar por cédula, nombre, encargado o ciudad…" /></div>
           <select id="list-vote-filter"><option value="">Voto: todos</option><option value="voted">Ya votó</option><option value="pending">Pendiente</option></select>
@@ -96,14 +98,14 @@
           <select id="list-transfer-filter"><option value="">Traslado: todos</option><option value="ok">OK</option><option value="pending">Pendiente</option></select>
         </div>
         <article class="panel table-panel">
-          <div class="table-wrap"><table class="my-list-table"><thead><tr><th>Mesa</th><th>Orden</th><th>Cédula</th><th>Apellido y Nombre</th><th>Institución</th><th>Ciudad</th><th>Celular</th><th>Encargado</th><th>Gestión</th><th>Voto</th><th>Mi lista</th><th>Traslado</th><th>Acciones</th></tr></thead><tbody id="my-list-body"></tbody></table></div>
+          <div class="table-wrap"><table class="my-list-table"><thead><tr><th>Mesa</th><th>Orden</th><th>Cédula</th><th>Apellido y Nombre</th><th>Institución</th><th>Ciudad</th><th>Celular</th><th>Encargado</th><th>Tipo de Gestión</th><th>Estado de Votó</th><th>Estado en mi lista</th><th>Traslado</th><th>Acciones</th></tr></thead><tbody id="my-list-body"></tbody></table></div>
           <div id="empty-list" class="empty hidden">Todavía no agregaste votantes a tu lista.</div>
           <div id="list-pagination" class="pagination"></div>
         </article>
       </section>
 
-      <section id="encargados" class="page">
-        <div class="section-action"><div><h3>Usuarios de consulta</h3><p>Cada cuenta accede al padrón general y puede confirmar votos.</p></div><button id="new-manager" class="btn primary">＋ Crear usuario</button></div>
+      <section id="encargados" class="page" data-admin>
+        <div class="page-intro compact"><div><span class="eyebrow">ADMINISTRACIÓN</span><h2>Usuarios de consulta</h2><p>Cada cuenta accede únicamente al padrón general y puede marcar a una persona como votó.</p></div><button id="new-manager" class="btn primary">＋ Crear usuario</button></div>
         <div id="managers-grid" class="cards-grid"></div>
       </section>
 
